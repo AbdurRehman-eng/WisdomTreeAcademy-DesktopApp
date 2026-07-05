@@ -1,6 +1,6 @@
 import React from 'react';
 import './Toast.css';
-import { useAppContext, useApp } from '../../context/AppContext';
+import { useApp } from '../../context/AppContext';
 import { CheckCircle2, AlertTriangle, AlertCircle, Info, X } from 'lucide-react';
 
 export const Toast = () => {

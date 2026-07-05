@@ -103,3 +103,11 @@ export const mockPendingSync = [
   { type: 'Assessment', detail: 'Lucas Martinez - Nursery English Diagnostic', date: 'Jul 5, 2026' },
   { type: 'Student Edit', detail: 'Sophia Chen - Updated contact details', date: 'Jul 5, 2026' }
 ];
+
+export const mockStudentScores = [
+  { id: '1', studentId: 'S101', studentName: 'Aiden Vance', subject: 'Basic Math', date: 'Jul 5, 2026', score: '3/3', performance: 'Exceeded Expectations' },
+  { id: '2', studentId: 'S102', studentName: 'Sophia Chen', subject: 'Advanced Math', date: 'Jul 5, 2026', score: '2/3', performance: 'Met Expectations' },
+  { id: '3', studentId: 'S103', studentName: 'Lucas Martinez', subject: 'English Literacy', date: 'Jul 4, 2026', score: '1/3', performance: 'Below Expectations' },
+  { id: '4', studentId: 'S104', studentName: 'Harper Bennett', subject: 'Basic Math', date: 'Jul 3, 2026', score: '3/3', performance: 'Exceeded Expectations' },
+  { id: '5', studentId: 'S106', studentName: 'Emma Watson', subject: 'Chemistry Basics', date: 'Jul 2, 2026', score: '2/3', performance: 'Met Expectations' }
+];

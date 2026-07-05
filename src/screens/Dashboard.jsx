@@ -13,7 +13,8 @@ import {
   RefreshCcw,
   ArrowRight,
   ShieldCheck,
-  FileCheck
+  FileCheck,
+  School
 } from 'lucide-react';
 
 export const Dashboard = () => {
