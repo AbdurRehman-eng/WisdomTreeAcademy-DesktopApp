@@ -1,0 +1,113 @@
+.assessment-setup-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.setup-heading-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.setup-workspace-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .setup-workspace-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.config-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.checkbox-form-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0;
+}
+
+.checkbox-widget {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.checkbox-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Info Guidelines */
+.info-card {
+  height: 100%;
+}
+
+.guidelines-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.guideline-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.guideline-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: rgba(46, 90, 172, 0.1);
+  color: var(--color-primary);
+  font-weight: 700;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.guideline-txt {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+/* Help Alert Box */
+.help-box {
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.help-box-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.help-box-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}

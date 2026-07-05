@@ -1,0 +1,468 @@
+.question-bank-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.qb-top-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 16px;
+}
+
+.qb-main-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.qb-sub-title {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.qb-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.csv-download-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.csv-download-link:hover {
+  text-decoration: underline;
+}
+
+/* Split Pane Layout */
+.qb-workspace-split {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .qb-workspace-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Filters Side panel */
+.qb-filters-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.filter-panel-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 10px;
+  color: var(--color-primary);
+}
+
+.filter-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.filter-badge-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.filter-pill {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-normal);
+}
+
+.filter-pill:hover {
+  border-color: var(--color-primary);
+  color: var(--text-primary);
+}
+
+.filter-pill.active {
+  background-color: var(--color-primary);
+  color: #FFFFFF;
+  border-color: var(--color-primary);
+}
+
+.filter-stats-card {
+  border-top: 1px dashed var(--border-color);
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stats-header {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stats-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.stats-value {
+  font-weight: 600;
+}
+
+.stats-value.highlight {
+  color: var(--color-primary);
+}
+
+/* Questions Grid List */
+.qb-list-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.questions-grid-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.question-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.qp-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.qp-badge-group {
+  display: flex;
+  gap: 6px;
+}
+
+.qp-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.qp-badge-grade {
+  background-color: rgba(46, 90, 172, 0.08);
+  color: var(--color-primary);
+}
+
+.qp-badge-subject {
+  background-color: rgba(245, 166, 35, 0.08);
+  color: var(--color-accent);
+}
+
+.qp-difficulty-tag {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.qp-difficulty-tag.diff-easy { color: var(--color-success); }
+.qp-difficulty-tag.diff-medium { color: var(--color-warning); }
+.qp-difficulty-tag.diff-hard { color: var(--color-error); }
+
+.qp-question-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.qp-mcq-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .qp-mcq-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.qp-mcq-option {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-app);
+  font-size: 13px;
+}
+
+.qp-mcq-option.correct {
+  background-color: var(--color-success-bg);
+  border-color: var(--color-success);
+}
+
+.qp-option-letter {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  font-size: 11px;
+}
+
+.qp-mcq-option.correct .qp-option-letter {
+  background-color: var(--color-success);
+  color: #FFFFFF;
+}
+
+.qp-option-text {
+  font-weight: 500;
+}
+
+.qp-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--border-color);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+
+.qp-actions-links {
+  display: flex;
+  gap: 12px;
+}
+
+.qp-action-btn-link {
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.qp-action-btn-link.edit {
+  color: var(--color-primary);
+}
+
+.qp-action-btn-link.delete {
+  color: var(--color-error);
+}
+
+.qb-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 40px;
+  text-align: center;
+  font-size: 48px;
+  gap: 12px;
+}
+
+.qb-empty-state h3 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+/* Modal Form Styles */
+.qb-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.form-row-double {
+  display: flex;
+  gap: 16px;
+}
+
+.form-row-double .form-group {
+  flex: 1;
+}
+
+.qb-textarea {
+  resize: vertical;
+}
+
+.qb-choices-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.choice-input-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.choice-marker {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--color-primary);
+}
+
+/* Voice recorder mockup elements */
+.qb-voice-recorder-mock {
+  border: 1px dashed var(--border-color);
+  background-color: var(--bg-app);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recorder-flex-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.recorder-record-btn {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: var(--transition-normal);
+  color: var(--text-primary);
+}
+
+.recorder-record-btn:hover {
+  background-color: rgba(225, 85, 84, 0.05);
+  border-color: var(--color-error);
+}
+
+.recorder-record-btn.recording {
+  background-color: var(--color-error-bg);
+  border-color: var(--color-error);
+  color: var(--color-error);
+  animation: pulse-border 1.2s infinite alternate;
+}
+
+.recorder-waveform-visual {
+  flex-grow: 1;
+  height: 24px;
+}
+
+.recorder-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.rec-bar {
+  fill: var(--text-secondary);
+  opacity: 0.35;
+  transform-origin: center;
+  transition: transform 0.2s ease;
+}
+
+.recorder-waveform-visual.active .rec-bar {
+  fill: var(--color-error);
+  opacity: 1;
+}
+
+/* Specific heights of bars */
+.rec-1  { transform: scaleY(0.2); }
+.rec-2  { transform: scaleY(0.5); }
+.rec-3  { transform: scaleY(0.8); }
+.rec-4  { transform: scaleY(0.3); }
+.rec-5  { transform: scaleY(0.6); }
+.rec-6  { transform: scaleY(0.9); }
+.rec-7  { transform: scaleY(1.0); }
+.rec-8  { transform: scaleY(0.4); }
+.rec-9  { transform: scaleY(0.7); }
+.rec-10 { transform: scaleY(0.5); }
+.rec-11 { transform: scaleY(0.8); }
+.rec-12 { transform: scaleY(0.3); }
+.rec-13 { transform: scaleY(0.6); }
+.rec-14 { transform: scaleY(0.2); }
+.rec-15 { transform: scaleY(0.4); }
+
+.recorder-waveform-visual.active .rec-1  { animation: pulse-waveform 0.5s infinite alternate; }
+.recorder-waveform-visual.active .rec-2  { animation: pulse-waveform 0.7s infinite alternate; animation-delay: 0.1s; }
+.recorder-waveform-visual.active .rec-3  { animation: pulse-waveform 0.4s infinite alternate; animation-delay: 0.2s; }
+.recorder-waveform-visual.active .rec-4  { animation: pulse-waveform 0.6s infinite alternate; animation-delay: 0.05s; }
+.recorder-waveform-visual.active .rec-5  { animation: pulse-waveform 0.8s infinite alternate; animation-delay: 0.3s; }
+.recorder-waveform-visual.active .rec-6  { animation: pulse-waveform 0.5s infinite alternate; animation-delay: 0.15s; }
+.recorder-waveform-visual.active .rec-7  { animation: pulse-waveform 0.7s infinite alternate; animation-delay: 0.25s; }
+.recorder-waveform-visual.active .rec-8  { animation: pulse-waveform 0.9s infinite alternate; }
+.recorder-waveform-visual.active .rec-9  { animation: pulse-waveform 0.4s infinite alternate; animation-delay: 0.12s; }
+.recorder-waveform-visual.active .rec-10 { animation: pulse-waveform 0.6s infinite alternate; animation-delay: 0.22s; }
+.recorder-waveform-visual.active .rec-11 { animation: pulse-waveform 0.8s infinite alternate; animation-delay: 0.08s; }
+.recorder-waveform-visual.active .rec-12 { animation: pulse-waveform 0.5s infinite alternate; animation-delay: 0.18s; }
+.recorder-waveform-visual.active .rec-13 { animation: pulse-waveform 0.7s infinite alternate; }
+.recorder-waveform-visual.active .rec-14 { animation: pulse-waveform 0.4s infinite alternate; animation-delay: 0.1s; }
+.recorder-waveform-visual.active .rec-15 { animation: pulse-waveform 0.6s infinite alternate; }
+
+.recorder-preview-controls {
+  display: flex;
+}
+
+.recorder-preview-play {
+  background-color: var(--color-primary);
+  color: #FFFFFF;
+  border: none;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: var(--transition-normal);
+}
+
+.recorder-preview-play:hover {
+  background-color: var(--color-primary-hover);
+}
+
+.recorder-status-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+@keyframes pulse-border {
+  from { box-shadow: 0 0 0 0px rgba(225, 85, 84, 0.4); }
+  to { box-shadow: 0 0 0 4px rgba(225, 85, 84, 0); }
+}

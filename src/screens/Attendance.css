@@ -1,0 +1,334 @@
+.attendance-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.attendance-header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 16px;
+  margin-bottom: 8px;
+}
+
+.current-date-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Registry main workspace layout */
+.attendance-grid-layout {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+@media (max-width: 1024px) {
+  .attendance-grid-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.registry-card {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.registry-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.grade-selector-tabs {
+  display: flex;
+  background-color: var(--bg-app);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.grade-tab-btn {
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 6px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-normal);
+}
+
+.grade-tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.grade-tab-btn.active {
+  background-color: var(--bg-surface);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Table styling inside registry card */
+.registry-table-wrapper {
+  overflow-x: auto;
+}
+
+.registry-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.registry-table th {
+  background-color: var(--bg-app);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.registry-row {
+  border-bottom: 1px solid var(--border-color);
+  transition: var(--transition-normal);
+}
+
+.registry-row:hover {
+  background-color: rgba(46, 90, 172, 0.01);
+}
+
+.registry-row:last-child {
+  border-bottom: none;
+}
+
+.registry-row td {
+  padding: 14px 24px;
+  font-size: 14px;
+}
+
+.row-roll {
+  font-family: monospace;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.row-student-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.row-grade-badge {
+  font-size: 11px;
+  font-weight: 600;
+  background-color: var(--bg-app);
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+/* Status Button Groups representing custom radios */
+.status-selector-button-group {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.status-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition-normal);
+}
+
+.status-btn .status-icon {
+  opacity: 0.4;
+  transition: var(--transition-normal);
+}
+
+.status-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-secondary);
+}
+
+.status-btn.active {
+  color: #FFFFFF;
+}
+
+.status-btn.active .status-icon {
+  opacity: 1;
+}
+
+.status-btn.btn-present.active {
+  background-color: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.status-btn.btn-late.active {
+  background-color: var(--color-warning);
+  border-color: var(--color-warning);
+}
+
+.status-btn.btn-absent.active {
+  background-color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+/* Roster Stats card */
+.roster-stats-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.stats-metric-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 20px;
+}
+
+.stats-percent {
+  font-size: 48px;
+  font-weight: 800;
+  color: var(--color-primary);
+  line-height: 1;
+}
+
+.stats-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.stats-breakdown-pills {
+  display: flex;
+  gap: 10px;
+}
+
+.breakdown-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.breakdown-item.present { background-color: var(--color-success-bg); color: var(--color-success); }
+.breakdown-item.late { background-color: rgba(245, 166, 35, 0.05); color: var(--color-accent); }
+.breakdown-item.absent { background-color: var(--color-error-bg); color: var(--color-error); }
+
+.breakdown-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.breakdown-val {
+  font-size: 18px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+/* Weekly analytics SVG chart */
+.weekly-analytics-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.svg-chart-container {
+  width: 100%;
+}
+
+.analytics-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.chart-gridline {
+  stroke: var(--border-color);
+  stroke-width: 1px;
+  stroke-dasharray: 4;
+}
+
+.chart-label-text {
+  font-size: 9px;
+  fill: var(--text-secondary);
+  font-weight: 600;
+}
+
+.chart-bar-group {
+  cursor: pointer;
+}
+
+.chart-bar-slot {
+  fill: var(--bg-app);
+  stroke: var(--border-color);
+  stroke-width: 1px;
+}
+
+.chart-bar-fill {
+  fill: var(--color-primary);
+  opacity: 0.85;
+  transition: fill 0.2s, height 0.3s;
+}
+
+.chart-bar-group:hover .chart-bar-fill {
+  fill: var(--color-primary-hover);
+  opacity: 1;
+}
+
+.chart-bar-label {
+  font-size: 10px;
+  fill: var(--text-secondary);
+  font-weight: 600;
+}
+
+.chart-bar-value {
+  font-size: 9px;
+  fill: var(--text-primary);
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.chart-bar-group:hover .chart-bar-value {
+  opacity: 1;
+}
