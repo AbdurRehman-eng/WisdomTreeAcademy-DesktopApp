@@ -1,0 +1,11 @@
+class,subject,text,option_a,option_b,option_c,option_d,correct_answer,audio_text
+Nursery,English,Which letter makes the "ah" sound like in the word APPLE?,A,B,C,D,A,"Hello there! Let's find the right letter. Which letter makes the ah sound like in the word APPLE? Look at the options and choose the correct letter."
+Nursery,Mathematics,How many fingers do you have on one hand?,3,4,5,6,C,"Let's count! How many fingers do you have on one hand? Count your fingers and choose the right number."
+Grade 1,English,Which word rhymes with CAT?,Dog,Hat,Sun,Tree,B,"Listen carefully. Which word rhymes with CAT? Dog, Hat, Sun, or Tree? Choose the word that sounds the same at the end as CAT."
+Grade 1,Mathematics,What is the sum of 8 plus 5?,11,12,13,14,C,"Let's add some numbers. What is the sum of 8 plus 5? Think about it and choose the correct answer."
+Grade 2,English,Which sentence is written correctly?,the cat is big,The cat is big.,The Cat Is Big,the Cat is big.,B,"Read each sentence. Which sentence is written correctly? Look at the capital letters and punctuation."
+Grade 2,Mathematics,What is 15 minus 7?,6,7,8,9,C,"Let's subtract. What is 15 minus 7? Think carefully and select the correct answer."
+Grade 3,Science,Which of the following is a mammal?,Goldfish,Dolphin,Eagle,Frog,B,"Here is a science question. Which of the following is a mammal? Goldfish, Dolphin, Eagle, or Frog? Choose the correct option."
+Grade 3,Mathematics,Calculate 6 multiplied by 8.,42,46,48,54,C,"Solve this multiplication. What is 6 multiplied by 8? Look carefully at the numbers and choose the correct answer."
+Grade 4,Science,Which organ pumps blood throughout the human body?,Lungs,Stomach,Heart,Brain,C,"Think about the human body. Which organ is responsible for pumping blood throughout the human body? Select the correct organ."
+Grade 5,Science,What is the chemical symbol for Water?,CO2,O2,H2O,NaCl,C,"What is the chemical formula for water? Check the four options and make your choice."

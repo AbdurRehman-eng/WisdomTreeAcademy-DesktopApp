@@ -18,12 +18,13 @@ The codebase has been reorganized into clean, modular workspaces:
 │   ├── main.cjs              # Electron main process backend controller
 │   ├── preload.cjs           # Secure Context Isolation IPC Bridge
 │   └── vite.config.mjs       # Vite configuration with Node test environments
-├── owner-dashboard/          # Cloud Synchronization & School Network Console
+├── owner-dashboard/          # React 19 + Vite 8 Standalone Owner Dashboard Web App
 ├── prototype/                # Legacy interactive web prototype (Isolated)
 ├── docs/                     # Guides and manuals
 │   ├── ADMIN_GUIDE.md        # System setup, deployment packaging, and database console scripts
 │   ├── TEACHER_GUIDE.md      # User manual for attendance, MCQs, and assessment runner
-│   └── DEVELOPER_GUIDE.md    # Process architectural flows, IPC channels, and schemas
+│   ├── DEVELOPER_GUIDE.md    # Process architectural flows, IPC channels, and schemas
+│   └── SYNC_GUIDE.md         # Supabase setup, postgres SQL schema, and RLS policies
 └── tests/                    # System integration testing scripts
 ```
 
@@ -87,3 +88,8 @@ For details on configuration and usage, refer to our system manuals inside the `
 * 🛡️ **[Administrator Setup Guide](file:///d:/Projects/Fenella-G/docs/ADMIN_GUIDE.md)**: Installer packaging, database consoles, seeding, and cryptographic licensing algorithms.
 * 🎓 **[Teacher User Manual](file:///d:/Projects/Fenella-G/docs/TEACHER_GUIDE.md)**: Logging student attendance, creating question audio prompts, and conducting diagnostic assessment runs.
 * 💻 **[Developer Technical Guide](file:///d:/Projects/Fenella-G/docs/DEVELOPER_GUIDE.md)**: IPC communication events map, SQLite entity-relations, and Vite/Vitest configurations.
+* 🔄 **[Cloud Synchronization Manual](file:///d:/Projects/Fenella-G/docs/SYNC_GUIDE.md)**: Supabase schema script setup, API configurations, and database Row Level Security policies.
+* 💿 **[Installation & Troubleshooting Guide](file:///d:/Projects/Fenella-G/docs/INSTALLATION_GUIDE.md)**: Standard setup wizard guide, database backup and restoration instructions.
+* 🎁 **[Product Ownership Handoff Checklist](file:///d:/Projects/Fenella-G/docs/OWNERSHIP_TRANSFER.md)**: Account transfers, licensing administration, and post-handoff security protocols.
+
+

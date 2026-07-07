@@ -104,3 +104,77 @@ Example valid key: `WTA-SCH001-G5-FULL-7F1AB9E4`
 2. Enter the activation key provided by the registry console.
 3. The desktop app validates the signature locally using `utils/licenseHelper.cjs`.
 4. If verified, the license state is persisted inside the SQLite `settings` table (`license_active = 'true'`), unlocking the evaluation features.
+
+---
+
+## 5. Question Bank CSV Import
+
+The Question Bank supports bulk question import via a CSV file. This is the fastest way to load a large set of diagnostic questions into the system.
+
+### Downloading the Template
+
+1. Navigate to **Question Bank** in the sidebar.
+2. Click **Get Template** — this downloads `sample_questions.csv` containing 10 example questions.
+3. Open the file in any spreadsheet application (Excel, LibreOffice Calc) or a text editor.
+
+### CSV Column Reference
+
+| Column | Required | Description |
+|--------|----------|-------------|
+| `class` | Yes | Grade level: `Nursery`, `Grade 1`, `Grade 2`, `Grade 3`, `Grade 4`, `Grade 5` |
+| `subject` | Yes | Subject name, e.g. `English`, `Mathematics`, `Science` |
+| `text` | Yes | The question text displayed to the student |
+| `option_a` | Yes | Answer choice A |
+| `option_b` | Yes | Answer choice B |
+| `option_c` | Yes | Answer choice C |
+| `option_d` | Yes | Answer choice D |
+| `correct_answer` | Yes | The correct option letter: `A`, `B`, `C`, or `D` (uppercase) |
+| `audio_text` | No | Text read aloud via TTS. If blank, the question text is used |
+
+### Importing Questions
+
+1. Fill in your CSV file (keep the header row).
+2. Navigate to **Question Bank** in the sidebar.
+3. Click **Import CSV Template**.
+4. Select your completed `.csv` file in the file picker.
+5. The system validates each row and imports all valid questions in a single transaction.
+6. A toast notification confirms the number of questions imported.
+
+> **Note:** Rows with missing required columns or an invalid `correct_answer` value are silently skipped. Always verify the total count shown in the confirmation toast.
+
+### Importing via SQL (Advanced)
+
+For large datasets, questions can be inserted directly via the SQLite console:
+```sql
+INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, status, sync_status, updated_at)
+VALUES (
+  lower(hex(randomblob(16))),
+  'Grade 1', 'Mathematics',
+  'What is 3 + 4?',
+  'What is 3 plus 4?',
+  '["6","7","8","9"]',
+  'B',
+  'active', 'pending',
+  strftime('%s','now') * 1000
+);
+```
+
+---
+
+## 6. Online Owner Dashboard & Cloud Analytics
+
+The separate web application located in `owner-dashboard/` serves as a cloud control center for school owners. It pulls live, aggregated analytics from all connected franchises from the central Supabase database.
+
+### Core Dashboard Modules
+- **Overview Panel:** Active stats including student enrolment, class attendance rates, assessment runs, and teacher rosters.
+- **Pupils & Staff Lists:** View details of students and teachers registered in all branches.
+- **Diagnostic Scorecard Transcripts:** Inspect candidate scores, completion date, correct/incorrect responses for each assessment run.
+- **Central Question Bank CRUD Manager:** Remote CRUD interface allowing the owner to add, edit, or delete MCQs directly in the central cloud database.
+
+### Setup & Credentials
+1. Access the hosted URL or run it locally by typing `npm run dev` in the `owner-dashboard/` directory.
+2. Under the Connection Overlay, enter your Supabase Project URL and Anon API key.
+3. Once connected, click **Connect & Enter**. The dashboard caches your connection details in `localStorage` for future visits.
+4. From the desktop client's **Sync & Settings** view, clicking **Launch Web Owner Dashboard** will automatically open the dashboard in a new web browser tab.
+
+

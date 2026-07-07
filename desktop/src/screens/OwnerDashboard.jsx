@@ -128,6 +128,29 @@ export const OwnerDashboard = () => {
                 <span style={{ color: 'var(--text-secondary)' }}>Total Storage Invoiced</span>
                 <strong>42.12 GB (Encrypted)</strong>
               </div>
+
+              <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
+                <button 
+                  onClick={() => window.open('http://localhost:5174', '_blank')}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    padding: '10px',
+                    backgroundColor: 'var(--color-primary, #6366f1)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  <Globe size={16} />
+                  <span>Launch Web Owner Dashboard</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

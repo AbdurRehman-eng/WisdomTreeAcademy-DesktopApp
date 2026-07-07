@@ -166,3 +166,55 @@ Tests are written under `desktop/tests` using **Vitest** configured to run in th
     globals: true,
   }
   ```
+
+---
+
+## 6. Cloud Sync Architecture (`utils/syncHelper.cjs`)
+
+### V1 Design — Push-Only via Supabase REST API
+
+The sync system uses Node.js's built-in `https` module to POST rows to a Supabase project using the standard REST upsert endpoint. No external npm packages are required.
+
+```
+Desktop (main.cjs)
+  └── ipcMain.handle('sync:trigger')
+       └── pushPendingRecords(db, projectUrl, apiKey)    [syncHelper.cjs]
+            ├── for each table in TABLES_CONFIG:
+            │    ├── SELECT rows WHERE sync_status = 'pending'
+            │    ├── POST rows to https://<project>.supabase.co/rest/v1/<table>
+            │    │   Headers: apikey, Authorization, Prefer: resolution=merge-duplicates
+            │    └── UPDATE rows SET sync_status = 'synced' on HTTP 2xx
+            └── INSERT into sync_log (audit trail)
+```
+
+### `TABLES_CONFIG`
+
+The `TABLES_CONFIG` array in `syncHelper.cjs` defines which tables to sync and how to map SQLite rows to cloud payloads. Each entry has:
+- `selectQuery` — SQL to select pending rows
+- `markSynced` — SQL to mark rows synced after successful push
+- `mapRow(r)` — transforms a SQLite row object to a JSON-safe cloud payload
+
+**Password columns are intentionally excluded** from the `teachers_admins` mapping — passwords stay local-only.
+
+### Configuration Storage
+
+Cloud credentials are stored in the local `settings` table as plain key-value rows:
+- `sync_endpoint` — Supabase project URL
+- `sync_api_key` — Supabase anon key
+
+These are read by `main.cjs` at sync time. The settings are set via the **Sync & Settings** screen or directly via SQL.
+
+### Extending for V2 Bidirectional Sync
+
+To add pull sync (cloud → local):
+1. Add a `pullUpdatedRecords(db, projectUrl, apiKey, lastSyncTime)` export to `syncHelper.cjs`.
+2. Query Supabase with `?updated_at=gt.<timestamp>` filter (Supabase REST supports this natively).
+3. Merge results into local SQLite using `INSERT OR REPLACE`.
+4. Store the last successful pull timestamp in `settings` as `last_pull_time`.
+
+### Error Handling
+
+- Individual table failures do not abort the entire sync — the loop continues.
+- All errors are collected and returned as `errors[]` in the result.
+- The `sync_log` table records whether the sync was `success` or `partial`.
+- Network timeouts are set to 15 seconds per table request.

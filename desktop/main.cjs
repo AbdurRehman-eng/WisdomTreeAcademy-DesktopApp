@@ -9,6 +9,7 @@ let db;
 
 const { hashPassword, verifyPassword } = require('./utils/cryptoHelper.cjs');
 const { validateLicenseKey } = require('./utils/licenseHelper.cjs');
+const { pushPendingRecords } = require('./utils/syncHelper.cjs');
 
 // Database Initialization
 function initDatabase() {
@@ -429,29 +430,50 @@ function registerIpcHandlers() {
   ipcMain.handle('sync:trigger', async () => {
     try {
       db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'syncing')").run();
-      
-      // Simulate sync delay
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      // Update all pending records to synced
-      db.prepare("UPDATE students SET sync_status = 'synced' WHERE sync_status = 'pending'").run();
-      db.prepare("UPDATE teachers_admins SET sync_status = 'synced' WHERE sync_status = 'pending'").run();
-      db.prepare("UPDATE classes SET sync_status = 'synced' WHERE sync_status = 'pending'").run();
-      db.prepare("UPDATE subjects SET sync_status = 'synced' WHERE sync_status = 'pending'").run();
-      db.prepare("UPDATE question_bank SET sync_status = 'synced' WHERE sync_status = 'pending'").run();
-      db.prepare("UPDATE assessments SET sync_status = 'synced' WHERE sync_status = 'pending'").run();
-      db.prepare("UPDATE attendance SET sync_status = 'synced' WHERE sync_status = 'pending'").run();
-      
-      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
-      
-      const logId = crypto.randomUUID();
-      db.prepare("INSERT INTO sync_log (id, sync_time, status, changes_synced) VALUES (?, ?, 'success', 0)")
-        .run(logId, Date.now());
-        
-      return { success: true };
+
+      // Read cloud config from settings table
+      const urlRow = db.prepare("SELECT value FROM settings WHERE key = 'sync_endpoint'").get();
+      const keyRow = db.prepare("SELECT value FROM settings WHERE key = 'sync_api_key'").get();
+      const projectUrl = urlRow ? urlRow.value : '';
+      const apiKey     = keyRow ? keyRow.value : '';
+
+      const result = await pushPendingRecords(db, projectUrl, apiKey);
+
+      if (result.success) {
+        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+        return { success: true, syncedCount: result.syncedCount };
+      } else {
+        // Partial sync — stay online but report errors
+        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+        return { success: false, error: result.errors.join('; '), syncedCount: result.syncedCount };
+      }
     } catch (e) {
       db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'offline')").run();
       return { success: false, error: e.message };
+    }
+  });
+
+  // Sync configuration IPC
+  ipcMain.handle('sync:set-config', (event, projectUrl, apiKey) => {
+    try {
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('sync_endpoint', ?)").run(projectUrl || '');
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('sync_api_key', ?)").run(apiKey || '');
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('sync:get-config', () => {
+    try {
+      const urlRow = db.prepare("SELECT value FROM settings WHERE key = 'sync_endpoint'").get();
+      const keyRow = db.prepare("SELECT value FROM settings WHERE key = 'sync_api_key'").get();
+      return {
+        projectUrl: urlRow ? urlRow.value : '',
+        apiKey:     keyRow ? keyRow.value : ''
+      };
+    } catch (e) {
+      return { projectUrl: '', apiKey: '' };
     }
   });
 }

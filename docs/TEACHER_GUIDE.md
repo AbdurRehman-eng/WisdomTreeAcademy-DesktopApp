@@ -71,13 +71,40 @@ The **Assessment Setup** and **Assessment Runner** are designed to be child-frie
 
 ---
 
-## 5. Reports Center & Exporting Scorecards
+## 5. Generating & Printing Student Reports
 
-The **System Reports** center aggregates all assessment sessions completed locally.
+The **Reports Center** aggregates all completed assessment sessions and allows you to generate and print official student report cards.
 
-### Viewing scorecards
-- Locate a completed evaluation transcript.
-- Click **Details** to expand the candidate's diagnostic report.
-- The scorecard shows the student's final score percentage, strengths/weaknesses (calculated based on question categories), and the specific question breakdown list.
-- Click **Print Report** to trigger a print preview or save the report as a PDF.
-- Averages are calculated dynamically at the top of the reporting dashboard for general classroom progress tracking.
+### Viewing Class Averages
+At the top of the Reports screen, six summary cards display the class-wide average score for each grade level (Nursery through Grade 5), along with a **performance band** label:
+- 🏆 **Exceeded Expectations** — Average score ≥ 90%
+- ⭐ **Met Expectations** — Average score 60–89%
+- 📌 **Below Expectations** — Average score < 60%
+
+### Printing a Single Student's Report Card
+1. Scroll to the **Completed Diagnostic Assessment Transcripts** table at the bottom of the Reports screen.
+2. Locate the student's assessment row.
+3. Click the **Print** button on the right side of the row.
+4. A print-ready report card opens in a new window, then the browser print dialog appears automatically.
+5. Choose **Save as PDF** or select a connected printer.
+
+### Printing All Transcripts at Once (Batch Print)
+1. Click the **Print All Transcripts** button in the top-right header of the Reports screen.
+2. All completed assessments are rendered as individual report cards (one per page).
+3. The browser print dialog opens — select your printer or **Save as PDF**.
+
+### What the Report Card Contains
+Each printed report card includes:
+- School name and "Official Report" stamp
+- Student name, roll number, grade, and assessment date
+- Score summary: correct answers, total questions, and final percentage
+- Performance band with descriptive label
+- A question-by-question answer breakdown grid (✅ correct / ❌ incorrect)
+- Signature lines for Teacher, Administrator, and Parent/Guardian
+
+### Sample Report Template
+A standalone sample report template is available at:
+`desktop/public/templates/sample_report_template.html`
+
+Open this file in any browser to preview the report layout, or use it as a design reference for custom branding.
+
