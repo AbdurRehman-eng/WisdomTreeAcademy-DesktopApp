@@ -93,6 +93,10 @@ export const AppProvider = ({ children }) => {
     });
   };
 
+  const addPendingSyncItem = (type, detail) => {
+    setPendingSyncCount(prev => prev + 1);
+  };
+
   return (
     <AppContext.Provider value={{
       user,
@@ -112,7 +116,8 @@ export const AppProvider = ({ children }) => {
       licenseKey,
       setLicenseKey,
       licenseActive,
-      setLicenseActive
+      setLicenseActive,
+      addPendingSyncItem
     }}>
       {children}
     </AppContext.Provider>

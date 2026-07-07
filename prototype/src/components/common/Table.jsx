@@ -53,7 +53,7 @@ export const Table = ({
           <thead>
             <tr>
               {columns.map((col, idx) => (
-                <th key={idx}>{col.header}</th>
+                <th key={idx}>{col.header || col.label}</th>
               ))}
               {(onEdit || onDelete) && <th style={{ textAlign: 'right' }}>{actionsLabel}</th>}
             </tr>
@@ -64,7 +64,7 @@ export const Table = ({
                 <tr key={row.id || rowIdx}>
                   {columns.map((col, colIdx) => (
                     <td key={colIdx}>
-                      {col.render ? col.render(row) : row[col.key]}
+                      {col.render ? col.render(row[col.key], row) : row[col.key]}
                     </td>
                   ))}
                   {(onEdit || onDelete) && (
