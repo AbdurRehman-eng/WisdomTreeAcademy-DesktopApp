@@ -13,8 +13,6 @@
   <img src="https://img.shields.io/badge/Node-%E2%89%A520.18.0-339933?logo=node.js&logoColor=white" alt="Node">
 </p>
 
----
-
 ## What this is
 
 Wisdom Tree Academy is a client application that turns a single desktop machine into a full school registry and diagnostic assessment station — no internet connection required. It runs entirely against a local **SQLite** database, syncing to a cloud **Supabase** instance only when connectivity is available.
@@ -33,15 +31,11 @@ Session ready   Attendance ledger    Aggregate reports      Push to Supabase
                 Present/Absent/Late  PDF report cards       when connected
 ```
 
----
-
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) `v20.18.0` or later
 - A C/C++ build toolchain for native module compilation (`better-sqlite3` builds against it — Visual Studio Build Tools on Windows)
 - Optional: a [Supabase](https://supabase.com/) project if you intend to enable cloud synchronization — see the [Sync Guide](./docs/SYNC_GUIDE.md)
-
----
 
 ## Quick start
 
@@ -72,8 +66,6 @@ The database is auto-generated on first launch with default admin/teacher accoun
 
 Follow the [Cloud Synchronization Manual](./docs/SYNC_GUIDE.md) to point the app at a Supabase project, apply the Postgres schema, and configure Row Level Security policies.
 
----
-
 ## File structure
 
 ```
@@ -101,8 +93,6 @@ WisdomTreeAcademy-DesktopApp/
 └── tests/                      # System integration test scripts
 ```
 
----
-
 ## How the assessment pipeline works
 
 The **Assessment Setup & Runner** is the core module teachers interact with day to day:
@@ -118,8 +108,6 @@ The **Assessment Setup & Runner** is the core module teachers interact with day 
 - **Offline-first by construction, not by fallback.** Every module writes to local SQLite first; cloud sync is a queue that drains opportunistically, so a school with unreliable internet never blocks on it.
 - **Child-appropriate assessment UX.** Large touch targets, TTS read-aloud, and micro-animation feedback are built into the runner itself rather than bolted on, since the target users (Nursery–Grade 5) can't reliably navigate a standard form UI.
 - **License-gated sync, not license-gated usage.** The cryptographic license check governs cloud synchronization only — the offline core (registry, attendance, assessments, reporting) works fully without a valid key, so a lapsed license degrades gracefully instead of locking teachers out mid-term.
-
----
 
 ## Testing
 
@@ -139,8 +127,6 @@ npm run test:unit
         Tests  5 passed (5)
 ```
 
----
-
 ## Customization
 
 ### Which files to edit manually
@@ -159,8 +145,6 @@ npm run test:unit
 - **Micro-animations** — hover elevation, sliding navigation indicators, and fluid active-state transitions
 - **Custom window chrome** — OS-integrated desktop titlebar controls and tailored pagination components
 
----
-
 ## Documentation
 
 | Guide | Description |
@@ -171,8 +155,6 @@ npm run test:unit
 | 🔄 [Cloud Synchronization Manual](./docs/SYNC_GUIDE.md) | Supabase schema setup, API configuration, and Row Level Security policies |
 | 💿 [Installation & Troubleshooting Guide](./docs/INSTALLATION_GUIDE.md) | Setup wizard walkthrough, database backup, and restoration |
 | 🎁 [Ownership Handoff Checklist](./docs/OWNERSHIP_TRANSFER.md) | Account transfer, licensing administration, and post-handoff security protocols |
-
----
 
 ## Tech stack
 
