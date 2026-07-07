@@ -1,0 +1,133 @@
+.audio-control-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: var(--bg-app);
+  border: 1px solid var(--border-color);
+  padding: 8px 16px;
+  border-radius: var(--radius-md);
+  width: fit-content;
+  user-select: none;
+}
+
+.audio-btn {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  transition: var(--transition-normal);
+}
+
+.audio-btn:hover {
+  background-color: var(--color-primary);
+  color: #FFFFFF;
+  border-color: var(--color-primary);
+}
+
+.play-pause-btn.playing {
+  background-color: var(--color-primary);
+  color: #FFFFFF;
+  border-color: var(--color-primary);
+}
+
+.waveform-visualizer {
+  width: 80px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+}
+
+.waveform-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.wave-bar {
+  fill: var(--text-secondary);
+  transform-origin: center;
+  transition: height 0.2s ease, y 0.2s ease, fill 0.2s ease;
+}
+
+/* Specific heights of bars */
+.bar-1  { transform: scaleY(0.3); }
+.bar-2  { transform: scaleY(0.5); }
+.bar-3  { transform: scaleY(0.8); }
+.bar-4  { transform: scaleY(0.4); }
+.bar-5  { transform: scaleY(0.6); }
+.bar-6  { transform: scaleY(0.9); }
+.bar-7  { transform: scaleY(1.0); }
+.bar-8  { transform: scaleY(0.7); }
+.bar-9  { transform: scaleY(0.5); }
+.bar-10 { transform: scaleY(0.8); }
+.bar-11 { transform: scaleY(0.3); }
+.bar-12 { transform: scaleY(0.6); }
+.bar-13 { transform: scaleY(0.2); }
+
+/* Animation when playing */
+.waveform-visualizer.active .wave-bar {
+  fill: var(--color-primary);
+}
+
+.waveform-visualizer.active .bar-1  { animation: pulse-waveform 0.6s infinite alternate; }
+.waveform-visualizer.active .bar-2  { animation: pulse-waveform 0.8s infinite alternate; animation-delay: 0.1s; }
+.waveform-visualizer.active .bar-3  { animation: pulse-waveform 0.5s infinite alternate; animation-delay: 0.2s; }
+.waveform-visualizer.active .bar-4  { animation: pulse-waveform 0.7s infinite alternate; animation-delay: 0.15s; }
+.waveform-visualizer.active .bar-5  { animation: pulse-waveform 0.9s infinite alternate; animation-delay: 0.3s; }
+.waveform-visualizer.active .bar-6  { animation: pulse-waveform 0.6s infinite alternate; animation-delay: 0.05s; }
+.waveform-visualizer.active .bar-7  { animation: pulse-waveform 0.8s infinite alternate; animation-delay: 0.25s; }
+.waveform-visualizer.active .bar-8  { animation: pulse-waveform 0.5s infinite alternate; animation-delay: 0.1s; }
+.waveform-visualizer.active .bar-9  { animation: pulse-waveform 0.7s infinite alternate; animation-delay: 0.35s; }
+.waveform-visualizer.active .bar-10 { animation: pulse-waveform 0.9s infinite alternate; animation-delay: 0.2s; }
+.waveform-visualizer.active .bar-11 { animation: pulse-waveform 0.6s infinite alternate; animation-delay: 0.12s; }
+.waveform-visualizer.active .bar-12 { animation: pulse-waveform 0.8s infinite alternate; animation-delay: 0.08s; }
+.waveform-visualizer.active .bar-13 { animation: pulse-waveform 0.5s infinite alternate; animation-delay: 0.3s; }
+
+.audio-helper-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+
+/* Child theme overrides */
+.audio-theme-child {
+  padding: 16px 28px;
+  border-radius: var(--radius-xl);
+  gap: 20px;
+  border: 2px dashed rgba(46, 90, 172, 0.2);
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-md);
+}
+
+[data-theme="dark"] .audio-theme-child {
+  border-color: rgba(91, 141, 239, 0.3);
+}
+
+.audio-theme-child .audio-btn {
+  border-radius: var(--radius-lg);
+  width: auto;
+  height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--border-color);
+  font-family: var(--font-child);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.audio-theme-child .btn-label-text {
+  margin-left: 8px;
+}
+
+.audio-theme-child .waveform-visualizer {
+  width: 140px;
+  height: 36px;
+}
+
+.audio-theme-child .waveform-visualizer.active .wave-bar {
+  fill: var(--color-accent);
+}

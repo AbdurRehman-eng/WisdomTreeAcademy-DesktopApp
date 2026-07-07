@@ -1,0 +1,117 @@
+.desktop-app-frame {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+/* Title Bar styling simulating Windows OS Chrome */
+.desktop-title-bar {
+  display: flex;
+  height: 32px;
+  background-color: #1F2937;
+  color: #EDEFF2;
+  font-size: 11px;
+  font-weight: 500;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  user-select: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+}
+
+[data-theme="dark"] .desktop-title-bar {
+  background-color: #0A0D12;
+  border-bottom-color: #1A1F26;
+}
+
+.title-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.window-icon {
+  color: var(--color-primary);
+}
+
+.window-offline-badge {
+  color: var(--color-accent);
+  font-weight: 700;
+  margin-left: 6px;
+}
+
+.title-bar-drag-area {
+  flex-grow: 1;
+  height: 100%;
+  cursor: default;
+}
+
+.title-bar-right {
+  display: flex;
+  height: 100%;
+}
+
+.title-bar-btn {
+  background: transparent;
+  border: none;
+  color: #EDEFF2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 100%;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.title-bar-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.title-bar-btn.btn-close:hover {
+  background-color: #E81123;
+  color: #FFFFFF;
+}
+
+/* Inner Window Content styling */
+.desktop-window-content {
+  display: flex;
+  flex-grow: 1;
+  overflow: hidden;
+  height: calc(100% - 32px);
+  position: relative;
+}
+
+.app-workspace-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-workspace-layout-full {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-main-viewport {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-content-scroll {
+  flex-grow: 1;
+  overflow-y: auto;
+  background-color: var(--bg-app);
+}
