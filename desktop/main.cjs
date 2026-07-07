@@ -7,8 +7,8 @@ const Database = require('better-sqlite3');
 let mainWindow;
 let db;
 
-const { hashPassword, verifyPassword } = require('./utils/cryptoHelper');
-const { validateLicenseKey } = require('./utils/licenseHelper');
+const { hashPassword, verifyPassword } = require('./utils/cryptoHelper.cjs');
+const { validateLicenseKey } = require('./utils/licenseHelper.cjs');
 
 // Database Initialization
 function initDatabase() {

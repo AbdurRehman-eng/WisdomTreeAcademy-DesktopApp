@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-const { hashPassword, verifyPassword } = require('../../utils/cryptoHelper');
-const { validateLicenseKey, generateLicenseKey } = require('../../utils/licenseHelper');
+const { hashPassword, verifyPassword } = require('../../utils/cryptoHelper.cjs');
+const { validateLicenseKey, generateLicenseKey } = require('../../utils/licenseHelper.cjs');
 
 describe('Crypto Helper Tests', () => {
   it('should hash a password and verify it correctly', () => {
