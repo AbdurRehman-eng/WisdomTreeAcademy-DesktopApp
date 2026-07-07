@@ -47,6 +47,8 @@ contextBridge.exposeInMainWorld('api', {
   getSyncInfo: () => ipcRenderer.invoke('sync:get-info'),
   triggerSync: () => ipcRenderer.invoke('sync:trigger'),
   toggleOnline: () => ipcRenderer.invoke('sync:toggle-online'),
+  setSyncConfig: (projectUrl, apiKey) => ipcRenderer.invoke('sync:set-config', projectUrl, apiKey),
+  getSyncConfig: () => ipcRenderer.invoke('sync:get-config'),
 
   // Window Controls
   minimizeWindow: () => ipcRenderer.send('window:minimize'),
