@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './QuestionBank.css';
 import { useApp } from '../context/AppContext';
 import AudioControl from '../components/common/AudioControl';
@@ -8,6 +8,7 @@ import { Plus, Download, Upload, Filter, Mic, Square, Play } from 'lucide-react'
 
 export const QuestionBank = () => {
   const { showToast } = useApp();
+  const csvFileInputRef = useRef(null);
   const [questions, setQuestions] = useState([]);
   const [selectedGrade, setSelectedGrade] = useState('All');
   const [selectedSubject, setSelectedSubject] = useState('All');
@@ -128,8 +129,79 @@ export const QuestionBank = () => {
     }
   };
 
+  // Parse a CSV string into an array of row objects
+  const parseCSV = (text) => {
+    const lines = text.trim().split('\n');
+    if (lines.length < 2) return [];
+    // Skip header row (index 0)
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      // Handle quoted fields (fields that contain commas)
+      const cols = [];
+      let inQuote = false;
+      let current = '';
+      for (let c = 0; c < line.length; c++) {
+        const ch = line[c];
+        if (ch === '"') {
+          inQuote = !inQuote;
+        } else if (ch === ',' && !inQuote) {
+          cols.push(current.trim());
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      cols.push(current.trim());
+      if (cols.length < 8) continue; // skip malformed rows
+      const [cls, subject, text, option_a, option_b, option_c, option_d, correct_answer, audio_text] = cols;
+      const correctUpper = correct_answer?.toUpperCase();
+      if (!['A','B','C','D'].includes(correctUpper)) continue;
+      rows.push({
+        class: cls,
+        subject,
+        text,
+        options: [option_a, option_b, option_c, option_d],
+        correct: correctUpper,
+        audioText: audio_text || text
+      });
+    }
+    return rows;
+  };
+
   const triggerImportCSV = () => {
-    showToast('Select a CSV file containing questions...', 'info');
+    csvFileInputRef.current?.click();
+  };
+
+  const handleCSVFileSelected = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input so the same file can be re-selected
+    e.target.value = '';
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const text = evt.target.result;
+      const rows = parseCSV(text);
+      if (rows.length === 0) {
+        showToast('No valid questions found in the CSV file. Check the format.', 'error');
+        return;
+      }
+      if (window.api) {
+        const res = await window.api.importQuestions(rows);
+        if (res.success) {
+          showToast(`Successfully imported ${rows.length} question(s) into the local bank.`, 'success');
+          fetchQuestions();
+        } else {
+          showToast(res.error || 'Import failed.', 'error');
+        }
+      } else {
+        // Web preview fallback
+        showToast(`Parsed ${rows.length} question(s) (web preview — not saved).`, 'info');
+      }
+    };
+    reader.onerror = () => showToast('Failed to read the CSV file.', 'error');
+    reader.readAsText(file);
   };
 
   return (
@@ -142,10 +214,22 @@ export const QuestionBank = () => {
         </div>
 
         <div className="qb-actions-group">
+          {/* Hidden file input for CSV import */}
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            ref={csvFileInputRef}
+            style={{ display: 'none' }}
+            onChange={handleCSVFileSelected}
+          />
           <Button variant="secondary" onClick={triggerImportCSV} icon={Upload}>
             Import CSV Template
           </Button>
-          <a href="#" className="csv-download-link" onClick={(e) => { e.preventDefault(); showToast('Downloading CSV template file...', 'success'); }}>
+          <a
+            href="/templates/sample_questions.csv"
+            download="sample_questions.csv"
+            className="csv-download-link"
+          >
             <Download size={14} style={{ marginRight: '6px' }} />
             Get Template
           </a>
