@@ -44,8 +44,20 @@ export const AppProvider = ({ children }) => {
 
   const login = async (username, password) => {
     if (!window.api) {
-      showToast('System API unavailable.', 'error');
-      return false;
+      // Web browser preview mock fallback
+      const mockUser = {
+        id: username === 'admin' ? 'A1' : 'T1',
+        username: username,
+        role: username === 'admin' ? 'admin' : 'teacher',
+        name: username === 'admin' ? 'System Administrator' : 'Teacher Williams',
+        email: username === 'admin' ? 'admin@wisdomtree.edu' : 'teacher@wisdomtree.edu'
+      };
+      setUser(mockUser);
+      localStorage.setItem('wta_user', JSON.stringify(mockUser));
+      setActiveScreen('dashboard');
+      localStorage.setItem('wta_screen', 'dashboard');
+      showToast(`Welcome back, ${mockUser.name}! (Web Preview Mode)`, 'success');
+      return true;
     }
     const res = await window.api.login(username, password);
     if (res.success) {
