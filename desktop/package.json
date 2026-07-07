@@ -35,5 +35,30 @@
     "vite": "^8.1.1",
     "vitest": "^3.0.0",
     "wait-on": "^8.0.2"
+  },
+  "build": {
+    "appId": "com.wisdomtree.academy",
+    "productName": "Wisdom Tree Academy",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "db/**/*",
+      "utils/**/*",
+      "main.cjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Wisdom Tree Academy"
+    }
   }
 }

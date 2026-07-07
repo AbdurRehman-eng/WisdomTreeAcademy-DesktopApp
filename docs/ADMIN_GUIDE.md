@@ -159,3 +159,22 @@ VALUES (
 );
 ```
 
+---
+
+## 6. Online Owner Dashboard & Cloud Analytics
+
+The separate web application located in `owner-dashboard/` serves as a cloud control center for school owners. It pulls live, aggregated analytics from all connected franchises from the central Supabase database.
+
+### Core Dashboard Modules
+- **Overview Panel:** Active stats including student enrolment, class attendance rates, assessment runs, and teacher rosters.
+- **Pupils & Staff Lists:** View details of students and teachers registered in all branches.
+- **Diagnostic Scorecard Transcripts:** Inspect candidate scores, completion date, correct/incorrect responses for each assessment run.
+- **Central Question Bank CRUD Manager:** Remote CRUD interface allowing the owner to add, edit, or delete MCQs directly in the central cloud database.
+
+### Setup & Credentials
+1. Access the hosted URL or run it locally by typing `npm run dev` in the `owner-dashboard/` directory.
+2. Under the Connection Overlay, enter your Supabase Project URL and Anon API key.
+3. Once connected, click **Connect & Enter**. The dashboard caches your connection details in `localStorage` for future visits.
+4. From the desktop client's **Sync & Settings** view, clicking **Launch Web Owner Dashboard** will automatically open the dashboard in a new web browser tab.
+
+
