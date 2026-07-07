@@ -1,0 +1,13 @@
+/* ============================================================
+   Reports Screen — Wisdom Tree Academy
+   Includes @media print rules for the application chrome.
+   The actual report card print CSS is injected dynamically
+   into the pop-up print window by Reports.jsx.
+============================================================ */
+
+/* Print: hide the entire application shell when printing */
+@media print {
+  body > #root {
+    display: none !important;
+  }
+}
