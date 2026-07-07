@@ -89,4 +89,7 @@ For details on configuration and usage, refer to our system manuals inside the `
 * 🎓 **[Teacher User Manual](file:///d:/Projects/Fenella-G/docs/TEACHER_GUIDE.md)**: Logging student attendance, creating question audio prompts, and conducting diagnostic assessment runs.
 * 💻 **[Developer Technical Guide](file:///d:/Projects/Fenella-G/docs/DEVELOPER_GUIDE.md)**: IPC communication events map, SQLite entity-relations, and Vite/Vitest configurations.
 * 🔄 **[Cloud Synchronization Manual](file:///d:/Projects/Fenella-G/docs/SYNC_GUIDE.md)**: Supabase schema script setup, API configurations, and database Row Level Security policies.
+* 💿 **[Installation & Troubleshooting Guide](file:///d:/Projects/Fenella-G/docs/INSTALLATION_GUIDE.md)**: Standard setup wizard guide, database backup and restoration instructions.
+* 🎁 **[Product Ownership Handoff Checklist](file:///d:/Projects/Fenella-G/docs/OWNERSHIP_TRANSFER.md)**: Account transfers, licensing administration, and post-handoff security protocols.
+
 
