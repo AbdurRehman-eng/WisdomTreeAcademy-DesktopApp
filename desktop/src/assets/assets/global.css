@@ -19,7 +19,7 @@
 
 /* Card components */
 .card {
-  background-color: var(--bg-surface);
+  background: var(--bg-surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--border-color);
@@ -27,8 +27,16 @@
   transition: var(--transition-normal);
 }
 
+.card-glass {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-md);
+}
+
 .card:hover {
   box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
 }
 
 /* Flexbox layouts */
@@ -79,12 +87,12 @@
 
 /* Page structural layouts */
 .page-container {
-  padding: 24px;
+  padding: 28px;
   height: 100%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 28px;
 }
 
 /* Custom form inputs */
@@ -95,13 +103,14 @@
 }
 
 .form-label {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-primary);
+  letter-spacing: -0.01em;
 }
 
 .form-input, .form-select {
-  padding: 10px 14px;
+  padding: 11px 15px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
   background-color: var(--bg-surface);
@@ -112,17 +121,23 @@
   transition: var(--transition-normal);
 }
 
+.form-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
 .form-input:focus, .form-select:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px rgba(46, 90, 172, 0.15);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  background-color: var(--bg-surface);
 }
 
 /* Animations */
 .fade-in {
-  animation: fadeIn 0.25s ease-out;
+  animation: fadeIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }

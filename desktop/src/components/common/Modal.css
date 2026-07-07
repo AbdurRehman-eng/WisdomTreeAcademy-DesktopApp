@@ -4,8 +4,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(18, 22, 28, 0.6);
-  backdrop-filter: blur(4px);
+  background-color: rgba(8, 10, 16, 0.45);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -13,11 +13,12 @@
 }
 
 [data-theme="dark"] .modal-overlay {
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: rgba(0, 0, 0, 0.6);
 }
 
 .modal-content {
   width: 90%;
+  max-width: 520px;
   background-color: var(--bg-surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
@@ -26,20 +27,31 @@
   flex-direction: column;
   max-height: 85vh;
   overflow: hidden;
+  animation: modalZoom 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+[data-theme="dark"] .modal-content {
+  border-color: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
 }
 
 .modal-header {
-  padding: 16px 24px;
+  padding: 20px 28px;
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
+[data-theme="dark"] .modal-header {
+  border-bottom-color: rgba(255, 255, 255, 0.04);
+}
+
 .modal-title {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
+  letter-spacing: -0.01em;
 }
 
 .modal-close-btn {
@@ -47,7 +59,7 @@
   border: none;
   color: var(--text-secondary);
   cursor: pointer;
-  padding: 4px;
+  padding: 6px;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -56,24 +68,40 @@
 }
 
 .modal-close-btn:hover {
-  background-color: var(--bg-app);
+  background-color: rgba(99, 102, 241, 0.08);
   color: var(--text-primary);
 }
 
 .modal-body {
-  padding: 24px;
+  padding: 28px;
   overflow-y: auto;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--text-primary);
 }
 
 .modal-footer {
-  padding: 16px 24px;
+  padding: 20px 28px;
   border-top: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
   background-color: var(--bg-app);
+}
+
+[data-theme="dark"] .modal-footer {
+  border-top-color: rgba(255, 255, 255, 0.04);
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+@keyframes modalZoom {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }

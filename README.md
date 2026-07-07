@@ -27,9 +27,17 @@ The codebase has been reorganized into clean, modular workspaces:
 └── tests/                    # System integration testing scripts
 ```
 
+## 🎨 Premium Glassmorphic UI/UX
+
+The Wisdom Tree Academy user interface has been completely overhauled with a state-of-the-art visual style:
+* **HSL-Tailored Theme Tokens**: Premium space slate dark mode and soft clean light mode tailored with deep indigo, purple, and success-emerald gradients.
+* **Glassmorphism & Depth**: Backdrop filters (`backdrop-filter: blur(12px)`), double border styles, and rich, layered box-shadows.
+* **Micro-Animations & Feedback**: Hover elevation offsets, smooth sliding navigation indicators, active selector animations, and fluid state changes.
+* **Custom Window Chrome**: Fully custom OS-integrated desktop titlebar controls, responsive headers, and tailored database pagination components.
+
 ---
 
-## 🎨 Core Application Modules
+## 🧩 Core Application Modules
 
 1. **Secure Login Portal:** Features role selections (Administrator vs. Teacher) validated against a local PBKDF2 hashed password table.
 2. **Interactive Student Registry:** Allows full CRUD, filtering by grade level, and automatic offline status tracking.

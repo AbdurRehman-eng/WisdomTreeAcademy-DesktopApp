@@ -11,6 +11,7 @@ export const ThemeProvider = ({ children }) => {
     const root = window.document.documentElement;
     root.classList.remove('light-theme', 'dark-theme');
     root.classList.add(`${theme}-theme`);
+    root.setAttribute('data-theme', theme);
     localStorage.setItem('wta_theme', theme);
   }, [theme]);
 
