@@ -1,64 +1,81 @@
-# Wisdom Tree Academy Diagnostic Assessment Software (Frontend UI/UX Prototype)
+# Wisdom Tree Academy: School Management & Diagnostic Assessment System
 
-This repository contains a high-fidelity, modular, and fully interactive frontend UI/UX prototype for the **Wisdom Tree Academy Diagnostic Assessment Software**. 
+Wisdom Tree Academy is a production-ready, offline-first client application for school registry, attendance logging, question bank curation, and diagnostic child assessments (Nursery through Grade 5).
 
-This system acts as an offline-first school management and diagnostic assessment platform tailored for Nursery through Grade 5.
-
-> [!IMPORTANT]
-> **Handoff Disclaimer & Reusability Note**
-> - This repository serves as a **design and interaction prototype** built in React + Vite + Vanilla CSS.
-> - The production-grade offline client application is targeted to be built separately as a native Windows desktop app using **.NET (WPF or WinForms)** with an offline-first **SQLite** database.
-> - The **Online Owner Dashboard** module designed here is web-native and its structure, styles, and layouts can directly carry over to the final cloud dashboard project.
+The system integrates a desktop client powered by **Electron** and **React 19** with a local **SQLite** database, supporting offline classrooms, and is ready for cloud database synchronization.
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+## 🛠️ Repository Architecture
 
-- **Core Framework**: React (Vite)
-- **Styling**: Pure Vanilla CSS (using CSS Variables for structural and theme-level design tokens)
-- **Icons**: Lucide React
-- **Typography**: 
-  - **Inter**: Clean, highly legible font for all administrative, class management, and data-dense dashboards.
-  - **Poppins**: Rounded, friendly font with high readability for the child-facing assessment runner interface.
+The codebase has been reorganized into clean, modular workspaces:
 
----
-
-## 🎨 Theme & Appearance
-
-The app implements a full, live-toggleable **Light Mode** and **Dark Mode**:
-- **Light Mode**: Off-white background (`#F7F8FA`), deep education-blue primary (`#2E5AAC`), warm amber accent (`#F5A623`).
-- **Dark Mode**: Deep navy-charcoal background (`#12161C`), lighter education-blue primary (`#5B8DEF`), warm amber accent (`#F5B84C`).
-- **Child-Facing Screens**: Employs warm, encouraging pastel visual palettes, large touch-friendly panels, and smooth micro-animations.
-
----
-
-## 📂 Core Screens Included
-
-1. **Login Screen** - Features split branding and role selector (Admin vs. Teacher) which dynamically drives the application shell and dashboards.
-2. **Dashboard (Admin)** - Metrics dashboards, sync status, and school-wide logs.
-3. **Dashboard (Teacher)** - Simplified dashboards with class selectors and assessment quick-starts.
-4. **Student Management** - Searchable/filterable listing tables and modal forms.
-5. **Teacher & Admin Management** - Role configuration and credential panels.
-6. **Class & Subject Management** - Drag-to-reorder layout for subjects.
-7. **Question Bank Manager** - Rich filters, visual audio control components, and custom SVG audio waveforms.
-8. **Assessment Runner** - Child-focused screen featuring large question cards, click-bouncing options, and read-aloud playback indicators.
-9. **Assessment Setup** - Class, subject, and student selection flows.
-10. **Assessment Results** - Dynamic score cards, strengths/weaknesses graphs, and report triggers.
-11. **Attendance Module** - Student and Teacher calendars with present/absent/late toggles and attendance graphs.
-12. **Reports Center** - Printable letterhead templates (A4 mock view) and file exporters.
-13. **Sync & Settings** - Licensing validation controls and manual sync indicators.
-14. **Online Owner Dashboard** - Distinct web browser mockup console displaying cloud metrics.
+```
+├── desktop/                  # Electron + React + SQLite Production Client App
+│   ├── db/                   # Database schema definitions and seeding SQL
+│   ├── src/                  # React 19 UI, Context providers, and Screens
+│   ├── utils/                # Cryptographic hashing & licensing helpers (CommonJS)
+│   ├── main.cjs              # Electron main process backend controller
+│   ├── preload.cjs           # Secure Context Isolation IPC Bridge
+│   └── vite.config.mjs       # Vite configuration with Node test environments
+├── owner-dashboard/          # Cloud Synchronization & School Network Console
+├── prototype/                # Legacy interactive web prototype (Isolated)
+├── docs/                     # Guides and manuals
+│   ├── ADMIN_GUIDE.md        # System setup, deployment packaging, and database console scripts
+│   ├── TEACHER_GUIDE.md      # User manual for attendance, MCQs, and assessment runner
+│   └── DEVELOPER_GUIDE.md    # Process architectural flows, IPC channels, and schemas
+└── tests/                    # System integration testing scripts
+```
 
 ---
 
-## 🚀 Running Locally
+## 🎨 Core Application Modules
 
-To launch the prototype, run the standard development commands:
+1. **Secure Login Portal:** Features role selections (Administrator vs. Teacher) validated against a local PBKDF2 hashed password table.
+2. **Interactive Student Registry:** Allows full CRUD, filtering by grade level, and automatic offline status tracking.
+3. **Registry Attendance Ledger:** Standard calendar tracker for Present/Absent/Late status pills with persistence and pending-sync indicators.
+4. **Assessment Setup & Runner:** A child-friendly assessment panel featuring large responsive question option cards, micro-animations, and integrated Text-to-Speech (TTS) read-aloud prompts.
+5. **Question Bank Manager:** Administrative question creator mapping options to schema-compliant SQLite JSON values.
+6. **Aggregate Reporting Center:** Calculates real-time average metrics per grade and lets teachers print standard report card sheets or download PDF transcripts.
+7. **Offline-First Synchronization Console:** Validates cryptographic license keys offline and queues changed database rows for synchronization when connected.
 
+---
+
+## 🚀 Quick Start Guide
+
+### 1. Run the Desktop App (Local Dev Mode)
+Ensure you have Node.js (version 20.18.0+) installed, then execute:
 ```bash
-# Install dependencies (React, Vite, Lucide React)
+# Navigate to the desktop app folder
+cd desktop
+
+# Install dependencies (automatically builds better-sqlite3 native bindings)
 npm install
 
-# Start the local development server
+# Start the desktop application
 npm run dev
 ```
+
+### 2. Run the Unit Test Suites
+We use **Vitest** configured in a Node testing environment to test cryptographic security helpers:
+```bash
+cd desktop
+npm run test:unit
+```
+
+All 5 cryptographic licensing and hashing helper unit tests execute and pass:
+```bash
+ ✓ tests/unit/helpers.test.js (5 tests) 11ms
+   Test Files  1 passed (1)
+        Tests  5 passed (5)
+```
+
+---
+
+## 📖 System Manuals & Documentation
+
+For details on configuration and usage, refer to our system manuals inside the `docs/` folder:
+
+* 🛡️ **[Administrator Setup Guide](file:///d:/Projects/Fenella-G/docs/ADMIN_GUIDE.md)**: Installer packaging, database consoles, seeding, and cryptographic licensing algorithms.
+* 🎓 **[Teacher User Manual](file:///d:/Projects/Fenella-G/docs/TEACHER_GUIDE.md)**: Logging student attendance, creating question audio prompts, and conducting diagnostic assessment runs.
+* 💻 **[Developer Technical Guide](file:///d:/Projects/Fenella-G/docs/DEVELOPER_GUIDE.md)**: IPC communication events map, SQLite entity-relations, and Vite/Vitest configurations.
