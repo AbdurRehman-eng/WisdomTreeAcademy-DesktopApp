@@ -165,12 +165,23 @@ The following tables are pushed on each sync:
 1. **Enable Row-Level Security (RLS)** on all tables in Supabase:
    ```sql
    ALTER TABLE students ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE teachers_admins ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE classes ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE subjects ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE question_bank ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE assessments ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
    ```
 
-2. **Create a policy** that allows only upserts (no reads from the public internet):
+2. **Create policies** that allow full CRUD (needed for push synchronization upserts and dashboard operations) for the anon and authenticated roles:
    ```sql
-   CREATE POLICY "allow_insert_upsert" ON students
-   FOR INSERT WITH CHECK (true);
+   CREATE POLICY "allow_all_operations" ON students FOR ALL TO public USING (true) WITH CHECK (true);
+   CREATE POLICY "allow_all_operations" ON teachers_admins FOR ALL TO public USING (true) WITH CHECK (true);
+   CREATE POLICY "allow_all_operations" ON classes FOR ALL TO public USING (true) WITH CHECK (true);
+   CREATE POLICY "allow_all_operations" ON subjects FOR ALL TO public USING (true) WITH CHECK (true);
+   CREATE POLICY "allow_all_operations" ON question_bank FOR ALL TO public USING (true) WITH CHECK (true);
+   CREATE POLICY "allow_all_operations" ON assessments FOR ALL TO public USING (true) WITH CHECK (true);
+   CREATE POLICY "allow_all_operations" ON attendance FOR ALL TO public USING (true) WITH CHECK (true);
    ```
 
 3. **Use a service role key** (instead of the anon key) and keep it in a server-side proxy rather than embedding it in the desktop client. This is the recommended V2 architecture.

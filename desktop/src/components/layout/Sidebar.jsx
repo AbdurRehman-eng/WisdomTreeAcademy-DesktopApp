@@ -16,8 +16,7 @@ import {
   Sliders,
   ChevronLeft,
   ChevronRight,
-  LogOut,
-  Globe
+  LogOut
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -38,8 +37,7 @@ export const Sidebar = () => {
     { id: 'assessment-results', label: 'Assessment Results', icon: BarChart3, roles: ['admin', 'teacher'] },
     { id: 'attendance', label: 'Attendance', icon: CalendarDays, roles: ['admin', 'teacher'] },
     { id: 'reports', label: 'Reports Center', icon: FileText, roles: ['admin', 'teacher'] },
-    { id: 'sync-settings', label: 'Sync & Settings', icon: Sliders, roles: ['admin', 'teacher'] },
-    { id: 'owner-dashboard', label: 'Online Owner Console', icon: Globe, roles: ['admin', 'teacher'], highlight: true }
+    { id: 'sync-settings', label: 'Sync & Settings', icon: Sliders, roles: ['admin', 'teacher'] }
   ];
 
   // Filter items based on user role

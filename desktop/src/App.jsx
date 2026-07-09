@@ -17,7 +17,6 @@ import AssessmentResults from './screens/AssessmentResults';
 import Attendance from './screens/Attendance';
 import Reports from './screens/Reports';
 import SyncSettings from './screens/SyncSettings';
-import OwnerDashboard from './screens/OwnerDashboard';
 
 function MainAppContent() {
   const { user, activeScreen } = useApp();
@@ -54,8 +53,6 @@ function MainAppContent() {
         return <Reports />;
       case 'sync-settings':
         return <SyncSettings />;
-      case 'owner-dashboard':
-        return <OwnerDashboard />;
       default:
         return <Dashboard />;
     }

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './Dashboard.css';
 import { useApp } from '../context/AppContext';
-import { mockActivityLog, mockPendingSync } from '../data/mockData';
 import {
   Users,
   GraduationCap,
@@ -17,20 +16,49 @@ import {
 
 export const Dashboard = () => {
   const { user, setScreen, pendingSyncCount, triggerSync, syncStatus } = useApp();
-  const [studentCount, setStudentCount] = useState(0);
-  const [facultyCount, setFacultyCount] = useState(0);
+  
+  const [dashboardData, setDashboardData] = useState({
+    studentCount: 0,
+    facultyCount: 0,
+    classCount: 0,
+    assessmentCount: 0,
+    todayAttendanceRate: 'Pending',
+    pendingSyncQueue: [],
+    activityLog: [],
+    activeClasses: []
+  });
+
+  const fetchDashboardData = async () => {
+    if (window.api) {
+      const data = await window.api.getDashboardData();
+      setDashboardData(data);
+    } else {
+      // Browser fallback (Web preview / fallback metrics)
+      setDashboardData({
+        studentCount: 8,
+        facultyCount: 4,
+        classCount: 6,
+        assessmentCount: 15,
+        todayAttendanceRate: '92%',
+        pendingSyncQueue: [
+          { type: 'Attendance', detail: 'Grade 1 Roster - July 5', date: 'Jul 5, 2026' }
+        ],
+        activityLog: [
+          { id: 'act1', type: 'attendance', message: 'Attendance recorded for Grade 1 (14 present, 1 late, 0 absent)', user: 'Teacher', time: '10 minutes ago' },
+          { id: 'act2', type: 'assessment', message: 'Aiden Vance completed the Grade 1 Diagnostic Assessment', user: 'Teacher', time: '1 hour ago' }
+        ],
+        activeClasses: [
+          { name: 'Nursery', studentCount: 2 },
+          { name: 'Grade 1', studentCount: 3 },
+          { name: 'Grade 2', studentCount: 3 }
+        ]
+      });
+    }
+  };
 
   useEffect(() => {
-    const fetchCounts = async () => {
-      if (window.api) {
-        const students = await window.api.getStudents();
-        const teachers = await window.api.getTeachers();
-        setStudentCount(students.length);
-        setFacultyCount(teachers.length);
-      }
-    };
-    fetchCounts();
-  }, []);
+    fetchDashboardData();
+  }, [pendingSyncCount]);
 
   if (!user) return null;
 
@@ -59,7 +87,7 @@ export const Dashboard = () => {
               </div>
               <div className="metric-details">
                 <span className="metric-label">Total Students</span>
-                <span className="metric-value">{studentCount}</span>
+                <span className="metric-value">{dashboardData.studentCount}</span>
                 <span className="metric-change positive">Registered Locally</span>
               </div>
             </div>
@@ -70,7 +98,7 @@ export const Dashboard = () => {
               </div>
               <div className="metric-details">
                 <span className="metric-label">Total Faculty</span>
-                <span className="metric-value">{facultyCount}</span>
+                <span className="metric-value">{dashboardData.facultyCount}</span>
                 <span className="metric-change">System Accounts</span>
               </div>
             </div>
@@ -81,7 +109,7 @@ export const Dashboard = () => {
               </div>
               <div className="metric-details">
                 <span className="metric-label">Today's Attendance</span>
-                <span className="metric-value">98.5%</span>
+                <span className="metric-value">{dashboardData.todayAttendanceRate}</span>
                 <span className="metric-change positive">All systems operational</span>
               </div>
             </div>
@@ -138,9 +166,9 @@ export const Dashboard = () => {
                   </button>
                 </div>
 
-                {pendingSyncCount > 0 ? (
+                {pendingSyncCount > 0 && dashboardData.pendingSyncQueue.length > 0 ? (
                   <div className="sync-queue-list">
-                    {mockPendingSync.map((item, idx) => (
+                    {dashboardData.pendingSyncQueue.map((item, idx) => (
                       <div key={idx} className="sync-queue-item">
                         <div className="sync-item-dot" />
                         <div className="sync-item-info">
@@ -164,7 +192,7 @@ export const Dashboard = () => {
             <div className="card activity-feed-card">
               <h3 className="card-title">Recent School Activities</h3>
               <div className="activity-timeline">
-                {mockActivityLog.map((log) => (
+                {dashboardData.activityLog.map((log) => (
                   <div key={log.id} className="activity-timeline-item">
                     <div className={`activity-icon-badge ${log.type}`}>
                       {log.type === 'attendance' && '📋'}
@@ -183,6 +211,11 @@ export const Dashboard = () => {
                     </div>
                   </div>
                 ))}
+                {dashboardData.activityLog.length === 0 && (
+                  <div className="sync-empty-state">
+                    <span className="sync-empty-text">No recent activity.</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -198,8 +231,8 @@ export const Dashboard = () => {
               </div>
               <div className="metric-details">
                 <span className="metric-label">My Assigned Classes</span>
-                <span className="metric-value">2 Rooms</span>
-                <span className="metric-change">Grade 1 & Grade 2</span>
+                <span className="metric-value">{dashboardData.classCount} Rooms</span>
+                <span className="metric-change">Active Classrooms</span>
               </div>
             </div>
 
@@ -209,7 +242,7 @@ export const Dashboard = () => {
               </div>
               <div className="metric-details">
                 <span className="metric-label">Completed Assessments</span>
-                <span className="metric-value">{studentCount > 0 ? `${studentCount * 2} tests` : '0 tests'}</span>
+                <span className="metric-value">{dashboardData.assessmentCount} tests</span>
                 <span className="metric-change positive">Evaluated locally</span>
               </div>
             </div>
@@ -220,7 +253,7 @@ export const Dashboard = () => {
               </div>
               <div className="metric-details">
                 <span className="metric-label">Today's Attendance Roll</span>
-                <span className="metric-value">Pending</span>
+                <span className="metric-value">{dashboardData.todayAttendanceRate}</span>
                 <span className="metric-change warning">Click to mark attendance</span>
               </div>
             </div>
@@ -232,22 +265,29 @@ export const Dashboard = () => {
               <div className="card classes-panel-card">
                 <h3 className="card-title">My Classroom Access</h3>
                 <div className="classes-grid">
-                  <div className="class-status-card">
-                    <div className="class-card-header">
-                      <span className="class-grade-tag">Grade 1</span>
-                      <span className="student-count-pill">{studentCount} Students</span>
+                  {dashboardData.activeClasses.map((cls, idx) => (
+                    <div key={idx} className="class-status-card">
+                      <div className="class-card-header">
+                        <span className="class-grade-tag">{cls.name}</span>
+                        <span className="student-count-pill">{cls.studentCount} Students</span>
+                      </div>
+                      <p className="class-subject-list">Active roster for evaluation</p>
+                      <div className="class-card-footer">
+                        <button onClick={() => setScreen('assessment-setup')} className="class-action-btn primary-action">
+                          <Play size={12} className="footer-btn-icon" />
+                          Run Assessment
+                        </button>
+                        <button onClick={() => setScreen('attendance')} className="class-action-btn secondary-action">
+                          Attendance
+                        </button>
+                      </div>
                     </div>
-                    <p className="class-subject-list">Reading & Phonics, Basic Math, Environmental Studies</p>
-                    <div className="class-card-footer">
-                      <button onClick={() => setScreen('assessment-setup')} className="class-action-btn primary-action">
-                        <Play size={12} className="footer-btn-icon" />
-                        Run Assessment
-                      </button>
-                      <button onClick={() => setScreen('attendance')} className="class-action-btn secondary-action">
-                        Attendance
-                      </button>
+                  ))}
+                  {dashboardData.activeClasses.length === 0 && (
+                    <div className="sync-empty-state">
+                      <span className="sync-empty-text">No active classes found.</span>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -280,14 +320,16 @@ export const Dashboard = () => {
             <div className="card activity-feed-card">
               <h3 className="card-title">My Activity Log</h3>
               <div className="activity-timeline">
-                {mockActivityLog
-                  .filter(l => l.user === 'Clarissa Mercer' || l.type === 'sync')
+                {dashboardData.activityLog
+                  .filter(l => l.user === 'Teacher' || l.type === 'sync' || l.user === user.name)
                   .map((log) => (
                     <div key={log.id} className="activity-timeline-item">
                       <div className={`activity-icon-badge ${log.type}`}>
                         {log.type === 'attendance' && '📋'}
                         {log.type === 'assessment' && '📝'}
                         {log.type === 'sync' && '🔄'}
+                        {log.type === 'student' && '👤'}
+                        {log.type === 'question' && '📚'}
                       </div>
                       <div className="activity-log-details">
                         <p className="activity-log-msg">{log.message}</p>
@@ -297,6 +339,11 @@ export const Dashboard = () => {
                       </div>
                     </div>
                   ))}
+                {dashboardData.activityLog.length === 0 && (
+                  <div className="sync-empty-state">
+                    <span className="sync-empty-text">No recent activity.</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
