@@ -42,7 +42,8 @@ export const AssessmentRunner = () => {
 
   useEffect(() => {
     if (!activeAssessment) {
-      setScreen('dashboard');
+      showToast('Please select a student and subject to launch an assessment.', 'warning');
+      setScreen('assessment-setup');
       return;
     }
 

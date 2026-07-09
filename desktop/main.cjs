@@ -7,6 +7,12 @@ const Database = require('better-sqlite3');
 let mainWindow;
 let db;
 
+// Single Instance Lock: Prevent multiple instances of the app from running concurrently
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+}
+
 const { hashPassword, verifyPassword } = require('./utils/cryptoHelper.cjs');
 const { validateLicenseKey } = require('./utils/licenseHelper.cjs');
 const { pushPendingRecords } = require('./utils/syncHelper.cjs');
@@ -87,6 +93,8 @@ function createWindow() {
     minWidth: 1024,
     minHeight: 720,
     frame: false, // Custom framing for that premium simulated OS experience
+    show: false, // Don't show the window until it's ready to avoid white flash
+    backgroundColor: '#0f172a', // Slate-900 / dark theme background to match premium glassmorphism
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -101,6 +109,13 @@ function createWindow() {
   } else {
     mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
   }
+
+  // Show window once it is fully painted
+  mainWindow.once('ready-to-show', () => {
+    if (mainWindow) {
+      mainWindow.show();
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -483,6 +498,157 @@ function registerIpcHandlers() {
       return { projectUrl: '', apiKey: '' };
     }
   });
+
+  ipcMain.handle('db:get-dashboard-data', () => {
+    try {
+      const studentCount = db.prepare("SELECT count(*) as count FROM students WHERE status = 'active'").get().count;
+      const facultyCount = db.prepare("SELECT count(*) as count FROM teachers_admins WHERE status = 'active'").get().count;
+      const classCount = db.prepare("SELECT count(*) as count FROM classes WHERE status = 'active'").get().count;
+      const assessmentCount = db.prepare("SELECT count(*) as count FROM assessments").get().count;
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const todayAttendance = db.prepare("SELECT status, count(*) as count FROM attendance WHERE date = ? AND type = 'student' GROUP BY status").all(todayStr);
+      let todayAttendanceRate = 'Pending';
+      if (todayAttendance.length > 0) {
+        let present = 0;
+        let late = 0;
+        let absent = 0;
+        todayAttendance.forEach(row => {
+          if (row.status === 'present') present = row.count;
+          else if (row.status === 'late') late = row.count;
+          else if (row.status === 'absent') absent = row.count;
+        });
+        const total = present + late + absent;
+        if (total > 0) {
+          todayAttendanceRate = `${Math.round(((present + (late * 0.8)) / total) * 100)}%`;
+        }
+      }
+
+      const pendingItems = [];
+      const pendingSt = db.prepare("SELECT name, class, updated_at FROM students WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
+      pendingSt.forEach(x => pendingItems.push({ type: 'Student', detail: `${x.name} (${x.class})`, timestamp: x.updated_at }));
+      const pendingT = db.prepare("SELECT name, role, updated_at FROM teachers_admins WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
+      pendingT.forEach(x => pendingItems.push({ type: 'Staff', detail: `${x.name} (${x.role})`, timestamp: x.updated_at }));
+      const pendingCl = db.prepare("SELECT name, updated_at FROM classes WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
+      pendingCl.forEach(x => pendingItems.push({ type: 'Classroom', detail: x.name, timestamp: x.updated_at }));
+      const pendingSub = db.prepare("SELECT name, updated_at FROM subjects WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
+      pendingSub.forEach(x => pendingItems.push({ type: 'Subject', detail: x.name, timestamp: x.updated_at }));
+      const pendingQu = db.prepare("SELECT class, subject, updated_at FROM question_bank WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
+      pendingQu.forEach(x => pendingItems.push({ type: 'Question', detail: `${x.subject} for ${x.class}`, timestamp: x.updated_at }));
+      const pendingAs = db.prepare("SELECT a.updated_at, s.name, a.score, a.total_questions FROM assessments a JOIN students s ON a.student_id = s.id WHERE a.sync_status = 'pending' ORDER BY a.updated_at DESC LIMIT 5").all();
+      pendingAs.forEach(x => pendingItems.push({ type: 'Assessment', detail: `${x.name} - ${x.score}/${x.total_questions}`, timestamp: x.updated_at }));
+      const pendingAt = db.prepare("SELECT a.updated_at, s.name, a.date, a.status FROM attendance a JOIN students s ON a.target_id = s.id WHERE a.sync_status = 'pending' ORDER BY a.updated_at DESC LIMIT 5").all();
+      pendingAt.forEach(x => pendingItems.push({ type: 'Attendance', detail: `${x.name} - ${x.status} (${x.date})`, timestamp: x.updated_at }));
+
+      pendingItems.sort((a, b) => b.timestamp - a.timestamp);
+      const pendingSyncQueue = pendingItems.slice(0, 10).map(item => ({
+        type: item.type,
+        detail: item.detail,
+        date: new Date(item.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+      }));
+
+      const activityLog = [];
+      const recentAssessments = db.prepare("SELECT a.updated_at, a.score, a.total_questions, s.name as student_name FROM assessments a JOIN students s ON a.student_id = s.id ORDER BY a.updated_at DESC LIMIT 5").all();
+      recentAssessments.forEach(x => {
+        activityLog.push({
+          type: 'assessment',
+          message: `${x.student_name} completed Diagnostic Assessment (${x.score}/${x.total_questions})`,
+          user: 'Teacher',
+          timestamp: x.updated_at
+        });
+      });
+      const recentSyncs = db.prepare("SELECT sync_time, status, changes_synced FROM sync_log ORDER BY sync_time DESC LIMIT 5").all();
+      recentSyncs.forEach(x => {
+        activityLog.push({
+          type: 'sync',
+          message: `Database sync ${x.status} (${x.changes_synced} items synced)`,
+          user: 'System',
+          timestamp: x.sync_time
+        });
+      });
+      const recentStudents = db.prepare("SELECT name, updated_at FROM students WHERE status = 'active' ORDER BY updated_at DESC LIMIT 5").all();
+      recentStudents.forEach(x => {
+        activityLog.push({
+          type: 'student',
+          message: `Registered student ${x.name}`,
+          user: 'Administrator',
+          timestamp: x.updated_at
+        });
+      });
+      const recentAttendance = db.prepare("SELECT a.updated_at, a.date, s.name, a.status FROM attendance a JOIN students s ON a.target_id = s.id WHERE a.type = 'student' ORDER BY a.updated_at DESC LIMIT 5").all();
+      recentAttendance.forEach(x => {
+        activityLog.push({
+          type: 'attendance',
+          message: `Attendance marked ${x.status} for ${x.name} (${x.date})`,
+          user: 'Teacher',
+          timestamp: x.updated_at
+        });
+      });
+      const recentQuestions = db.prepare("SELECT class, subject, updated_at FROM question_bank WHERE status = 'active' ORDER BY updated_at DESC LIMIT 5").all();
+      recentQuestions.forEach(x => {
+        activityLog.push({
+          type: 'question',
+          message: `Added new question to ${x.class} ${x.subject} Bank`,
+          user: 'Administrator',
+          timestamp: x.updated_at
+        });
+      });
+
+      activityLog.sort((a, b) => b.timestamp - a.timestamp);
+      const formattedActivityLog = activityLog.slice(0, 10).map((log, idx) => {
+        let timeDesc = 'Just now';
+        const diffMs = Date.now() - log.timestamp;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHrs = Math.floor(diffMins / 60);
+        if (diffMins > 0 && diffMins < 60) {
+          timeDesc = `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+        } else if (diffHrs > 0 && diffHrs < 24) {
+          timeDesc = `${diffHrs} hour${diffHrs > 1 ? 's' : ''} ago`;
+        } else if (diffHrs >= 24) {
+          timeDesc = new Date(log.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        }
+        return {
+          id: `act_${idx}_${log.timestamp}`,
+          type: log.type,
+          message: log.message,
+          user: log.user,
+          time: timeDesc
+        };
+      });
+
+      const classrooms = db.prepare("SELECT name FROM classes WHERE status = 'active'").all();
+      const studentCounts = db.prepare("SELECT class, count(*) as count FROM students WHERE status = 'active' GROUP BY class").all();
+      const countMap = {};
+      studentCounts.forEach(x => { countMap[x.class] = x.count; });
+      const activeClasses = classrooms.map(c => ({
+        name: c.name,
+        studentCount: countMap[c.name] || 0
+      }));
+
+      return {
+        studentCount,
+        facultyCount,
+        classCount,
+        assessmentCount,
+        todayAttendanceRate,
+        pendingSyncQueue,
+        activityLog: formattedActivityLog,
+        activeClasses
+      };
+    } catch (e) {
+      console.error(e);
+      return {
+        studentCount: 0,
+        facultyCount: 0,
+        classCount: 0,
+        assessmentCount: 0,
+        todayAttendanceRate: 'Error',
+        pendingSyncQueue: [],
+        activityLog: [],
+        activeClasses: []
+      };
+    }
+  });
 }
 
 // App lifecycle
@@ -496,6 +662,14 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+});
+
+app.on('second-instance', (event, commandLine, workingDirectory) => {
+  // Focus the existing window when user tries to start another instance
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
 });
 
 app.on('window-all-closed', () => {

@@ -28,6 +28,16 @@ if (typeof window !== 'undefined') {
     getSyncInfo: async () => ({ pendingCount: 0, status: 'synced' }),
     triggerSync: async () => ({ success: true }),
     toggleOnline: async () => ({ success: true, status: 'synced' }),
+    getDashboardData: async () => ({
+      studentCount: 0,
+      facultyCount: 0,
+      classCount: 0,
+      assessmentCount: 0,
+      todayAttendanceRate: 'No Roll Call',
+      pendingSyncQueue: [],
+      activityLog: [],
+      activeClasses: []
+    }),
     minimizeWindow: () => {},
     maximizeWindow: () => {},
     closeWindow: () => {},
