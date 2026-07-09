@@ -70,6 +70,13 @@ function seedDatabase() {
     db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run('license_active', 'true');
     db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run('online_status', 'synced');
   }
+
+  // Seed default cloud sync configuration if empty
+  const syncCheck = db.prepare("SELECT count(*) as count FROM settings WHERE key = 'sync_endpoint'").get();
+  if (syncCheck.count === 0) {
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run('sync_endpoint', 'https://duzxlwnkmfeqicymnqll.supabase.co');
+    db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)").run('sync_api_key', 'sb_publishable_TdK872qRZ_-GBTxXYrhcfg_C3uN5G9k');
+  }
 }
 
 // Window Management
