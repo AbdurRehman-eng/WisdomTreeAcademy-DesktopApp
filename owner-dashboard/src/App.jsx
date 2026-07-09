@@ -40,10 +40,10 @@ export default function App() {
 
   // Supabase Connection Settings
   const [supabaseUrl, setSupabaseUrl] = useState(() => {
-    return localStorage.getItem('supabase-url') || '';
+    return localStorage.getItem('supabase-url') || import.meta.env.VITE_SUPABASE_URL || '';
   });
   const [supabaseKey, setSupabaseKey] = useState(() => {
-    return localStorage.getItem('supabase-anon-key') || '';
+    return localStorage.getItem('supabase-anon-key') || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
   });
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState('');
