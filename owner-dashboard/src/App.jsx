@@ -15,7 +15,8 @@ import {
   RefreshCw,
   Plus,
   Trash2,
-  Edit
+  Edit,
+  Key
 } from 'lucide-react';
 
 export default function App() {
@@ -66,6 +67,42 @@ export default function App() {
 
   // Selected Assessment for Modal Details View
   const [selectedAssessment, setSelectedAssessment] = useState(null);
+
+  // Licensing Tool State
+  const [licSchoolCode, setLicSchoolCode] = useState('');
+  const [licMaxGrade, setLicMaxGrade] = useState('G5');
+  const [licFeatures, setLicFeatures] = useState('FULL');
+  const [generatedKey, setGeneratedKey] = useState('');
+
+  const handleGenerateLicenseKey = async () => {
+    if (!licSchoolCode.trim()) {
+      alert('Please enter a School Branch Code.');
+      return;
+    }
+    
+    const schoolCode = licSchoolCode.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!schoolCode) {
+      alert('School Code must contain alphanumeric characters.');
+      return;
+    }
+
+    const SECRET_PEPPER = 'WisdomTreeAcademySalt2026';
+    const msg = `${schoolCode}-${licMaxGrade}-${licFeatures}-${SECRET_PEPPER}`;
+    
+    try {
+      const msgBuffer = new TextEncoder().encode(msg);
+      const hashBuffer = await window.crypto.subtle.digest('SHA-256', msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+      const signature = hashHex.substring(0, 8).toUpperCase();
+      
+      const key = `WTA-${schoolCode}-${licMaxGrade}-${licFeatures}-${signature}`;
+      setGeneratedKey(key);
+    } catch (err) {
+      console.error(err);
+      alert('Error generating license signature.');
+    }
+  };
 
   // Apply dark class on theme change
   useEffect(() => {
@@ -409,6 +446,12 @@ export default function App() {
                 <span>Attendance Logs</span>
               </button>
             </li>
+            <li>
+              <button className={`nav-item ${activeTab === 'licensing' ? 'active' : ''}`} onClick={() => setActiveTab('licensing')}>
+                <Key size={18} />
+                <span>Issue License Key</span>
+              </button>
+            </li>
           </ul>
         </nav>
 
@@ -452,6 +495,7 @@ export default function App() {
               {activeTab === 'questions' && 'Franchise MCQ Question Bank'}
               {activeTab === 'assessments' && 'Diagnostic Assessment Transcripts'}
               {activeTab === 'attendance' && 'Student & Teacher Attendance Audit'}
+              {activeTab === 'licensing' && 'Offline License Key Generator'}
             </h2>
             <p className="header-subtitle">
               Connected to Supabase Cluster: <code>{new URL(supabaseUrl).hostname}</code>
@@ -928,6 +972,113 @@ export default function App() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* LICENSING TAB */}
+        {activeTab === 'licensing' && (
+          <div className="card fade-in" style={{ maxWidth: '600px', margin: '0 auto' }}>
+            <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Key size={20} className="color-primary" />
+              Generate Branch Activation Key
+            </h3>
+            
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
+              Wisdom Tree Academy uses offline cryptographic activation. Generate a secure, signed key for a franchise branch school here, which they can paste into their desktop application settings.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 'bold' }}>School Branch Code</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. SCH001, WESTSIDE, LHR05"
+                  value={licSchoolCode}
+                  onChange={e => setLicSchoolCode(e.target.value)}
+                  style={{ textTransform: 'uppercase' }}
+                />
+                <span className="card-footer-text">Alphanumeric code identifying this school branch.</span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 'bold' }}>Max Grade Level</label>
+                  <select
+                    className="form-input"
+                    value={licMaxGrade}
+                    onChange={e => setLicMaxGrade(e.target.value)}
+                  >
+                    <option value="NURS">Nursery Only</option>
+                    <option value="G1">Grade 1 Max</option>
+                    <option value="G2">Grade 2 Max</option>
+                    <option value="G3">Grade 3 Max</option>
+                    <option value="G4">Grade 4 Max</option>
+                    <option value="G5">Grade 5 Max (Standard)</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 'bold' }}>Feature Level</label>
+                  <select
+                    className="form-input"
+                    value={licFeatures}
+                    onChange={e => setLicFeatures(e.target.value)}
+                  >
+                    <option value="FULL">Full Suite (Assessments + Sync)</option>
+                    <option value="LITE">Lite (Local Offline Only)</option>
+                  </select>
+                </div>
+              </div>
+
+              <button
+                className="btn btn-primary"
+                onClick={handleGenerateLicenseKey}
+                style={{ marginTop: '10px', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}
+              >
+                <Key size={16} />
+                Generate Signed License Key
+              </button>
+
+              {generatedKey && (
+                <div style={{
+                  marginTop: '20px',
+                  padding: '16px',
+                  backgroundColor: 'var(--bg-surface)',
+                  border: '1px dashed var(--border-color)',
+                  borderRadius: 'var(--radius-sm)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px'
+                }}>
+                  <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text-secondary)' }}>Generated Product Key:</span>
+                  <div style={{
+                    fontFamily: 'monospace',
+                    fontSize: '15px',
+                    fontWeight: 'bold',
+                    color: 'var(--color-primary)',
+                    backgroundColor: 'var(--bg-app)',
+                    padding: '10px',
+                    borderRadius: '4px',
+                    border: '1px solid var(--border-color)',
+                    wordBreak: 'break-all',
+                    textAlign: 'center'
+                  }}>
+                    {generatedKey}
+                  </div>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      navigator.clipboard.writeText(generatedKey);
+                      alert('Copied license key to clipboard!');
+                    }}
+                    style={{ fontSize: '12px', padding: '6px 12px', alignSelf: 'center' }}
+                  >
+                    Copy Key to Clipboard
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}
