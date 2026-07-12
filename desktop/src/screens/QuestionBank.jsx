@@ -7,7 +7,7 @@ import Modal from '../components/common/Modal';
 import { Plus, Download, Upload, Filter, Mic, Square, Play } from 'lucide-react';
 
 export const QuestionBank = () => {
-  const { showToast } = useApp();
+  const { showToast, refreshSyncInfo } = useApp();
   const csvFileInputRef = useRef(null);
   const [questions, setQuestions] = useState([]);
   const [selectedGrade, setSelectedGrade] = useState('All');
@@ -129,6 +129,7 @@ export const QuestionBank = () => {
       if (res.success) {
         showToast('Question registered in Local Bank successfully.', 'success');
         fetchQuestions();
+        refreshSyncInfo();
         setIsAddModalOpen(false);
 
         // Reset Form
@@ -152,6 +153,7 @@ export const QuestionBank = () => {
       if (res.success) {
         showToast(`Question deleted.`, 'success');
         fetchQuestions();
+        refreshSyncInfo();
       } else {
         showToast(res.error || 'Failed to delete question.', 'error');
       }
@@ -221,6 +223,7 @@ export const QuestionBank = () => {
         if (res.success) {
           showToast(`Successfully imported ${rows.length} question(s) into the local bank.`, 'success');
           fetchQuestions();
+          refreshSyncInfo();
         } else {
           showToast(res.error || 'Import failed.', 'error');
         }
