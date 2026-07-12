@@ -14,7 +14,8 @@ export const SyncSettings = () => {
     showToast,
     licenseKey,
     licenseActive,
-    validateLicense
+    validateLicense,
+    refreshSyncInfo
   } = useApp();
 
   const [newKey, setNewKey] = useState('');
@@ -161,6 +162,7 @@ export const SyncSettings = () => {
         const res = await window.api.setSyncConfig(cloudUrl.trim(), cloudApiKey.trim());
         if (res.success) {
           showToast('Cloud sync configuration saved successfully.', 'success');
+          refreshSyncInfo();
         } else {
           showToast(res.error || 'Failed to save configuration.', 'error');
         }
