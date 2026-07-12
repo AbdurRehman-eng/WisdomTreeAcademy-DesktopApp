@@ -126,6 +126,7 @@ export default function App() {
   const [qOptD, setQOptD] = useState('');
   const [qCorrect, setQCorrect] = useState('A');
   const [qAudioText, setQAudioText] = useState('');
+  const [qImagePath, setQImagePath] = useState('');
   const [isSavingQuestion, setIsSavingQuestion] = useState(false);
 
   // Supabase Connection Settings
@@ -292,6 +293,7 @@ export default function App() {
     setQOptD('');
     setQCorrect('A');
     setQAudioText('');
+    setQImagePath('');
     setShowQuestionModal(true);
   };
 
@@ -314,6 +316,7 @@ export default function App() {
     
     setQCorrect(q.correct_answer || 'A');
     setQAudioText(q.audio_text || '');
+    setQImagePath(q.image_path || '');
     setShowQuestionModal(true);
   };
 
@@ -338,6 +341,7 @@ export default function App() {
       options_json: JSON.stringify(optionsList),
       correct_answer: qCorrect,
       audio_text: qAudioText.trim() || null,
+      image_path: qImagePath || null,
       updated_at: Date.now()
     };
 
@@ -901,6 +905,11 @@ export default function App() {
                         <td style={{ maxWidth: '400px', whiteSpace: 'normal' }}>
                           <strong>{q.text}</strong>
                           {q.audio_text && <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Audio cue: "{q.audio_text}"</div>}
+                          {q.image_path && (
+                            <div style={{ marginTop: '6px' }}>
+                              <img src={q.image_path} alt="Question Visual" style={{ maxWidth: '100px', maxHeight: '60px', objectFit: 'contain', borderRadius: '4px', border: '1px solid var(--border-color)' }} />
+                            </div>
+                          )}
                         </td>
                         <td>
                           <span className="badge badge-success">{q.correct_answer}</span>
@@ -1399,6 +1408,35 @@ export default function App() {
                       onChange={e => setQAudioText(e.target.value)}
                       style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
                     />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>Illustrative Image (Optional)</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={e => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (evt) => {
+                            setQImagePath(evt.target.result);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      style={{ width: '100%', padding: '6px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', paddingTop: '20px' }}>
+                    {qImagePath && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <img src={qImagePath} alt="Preview" style={{ maxWidth: '80px', maxHeight: '50px', objectFit: 'contain', borderRadius: '4px', border: '1px solid var(--border-color)' }} />
+                        <button type="button" onClick={() => setQImagePath('')} style={{ padding: '4px 8px', background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>Remove</button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

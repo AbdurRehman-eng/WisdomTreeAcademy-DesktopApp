@@ -494,7 +494,8 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('sync:trigger', async () => {
+  ipcMain.handle('sync:trigger', async (event, options = {}) => {
+    const force = !!options.force;
     try {
       db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'syncing')").run();
 
@@ -504,11 +505,14 @@ function registerIpcHandlers() {
       const projectUrl = urlRow ? urlRow.value : '';
       const apiKey     = keyRow ? keyRow.value : '';
 
-      const result = await pushPendingRecords(db, projectUrl, apiKey);
+      const result = await pushPendingRecords(db, projectUrl, apiKey, force);
 
       if (result.success) {
         db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
         return { success: true, syncedCount: result.syncedCount };
+      } else if (result.hasConflicts) {
+        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+        return { success: false, hasConflicts: true, conflicts: result.conflicts };
       } else {
         // Partial sync — stay online but report errors
         db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
@@ -700,7 +704,7 @@ function registerIpcHandlers() {
     const { filePaths } = await dialog.showOpenDialog(mainWindow, {
       title: 'Select Question Image',
       filters: [
-        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'] }
+        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'] }
       ],
       properties: ['openFile']
     });
@@ -711,18 +715,20 @@ function registerIpcHandlers() {
 
     try {
       const selectedPath = filePaths[0];
-      const destDir = path.join(app.getPath('userData'), 'question_images');
-      if (!fs.existsSync(destDir)) {
-        fs.mkdirSync(destDir, { recursive: true });
-      }
+      const fs = require('fs');
+      const path = require('path');
+      const ext = path.extname(selectedPath).toLowerCase();
+      let mimeType = 'image/png';
+      if (ext === '.jpg' || ext === '.jpeg') mimeType = 'image/jpeg';
+      else if (ext === '.gif') mimeType = 'image/gif';
+      else if (ext === '.webp') mimeType = 'image/webp';
+      else if (ext === '.svg') mimeType = 'image/svg+xml';
 
-      const fileExt = path.extname(selectedPath);
-      const fileName = `${crypto.randomUUID()}${fileExt}`;
-      const destPath = path.join(destDir, fileName);
+      const fileData = fs.readFileSync(selectedPath);
+      const base64Data = fileData.toString('base64');
+      const dataUrl = `data:${mimeType};base64,${base64Data}`;
 
-      fs.copyFileSync(selectedPath, destPath);
-
-      return { success: true, fileName: fileName };
+      return { success: true, dataUrl: dataUrl };
     } catch (e) {
       console.error(e);
       return { success: false, error: e.message };

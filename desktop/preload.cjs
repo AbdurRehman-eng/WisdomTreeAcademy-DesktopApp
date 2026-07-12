@@ -46,7 +46,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Sync
   getSyncInfo: () => ipcRenderer.invoke('sync:get-info'),
-  triggerSync: () => ipcRenderer.invoke('sync:trigger'),
+  triggerSync: (options) => ipcRenderer.invoke('sync:trigger', options),
   toggleOnline: () => ipcRenderer.invoke('sync:toggle-online'),
   setSyncConfig: (projectUrl, apiKey) => ipcRenderer.invoke('sync:set-config', projectUrl, apiKey),
   getSyncConfig: () => ipcRenderer.invoke('sync:get-config'),

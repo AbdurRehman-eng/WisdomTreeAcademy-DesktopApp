@@ -205,7 +205,7 @@ export const AssessmentRunner = () => {
             <div className="child-question-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               {activeQuestion.image_path && (
                 <div className="child-question-image-container" style={{ marginBottom: '16px', borderRadius: '12px', overflow: 'hidden', border: '2px solid rgba(255,255,255,0.2)', maxHeight: '250px', display: 'flex', justifyContent: 'center', background: 'rgba(255,255,255,0.1)', padding: '8px' }}>
-                  <img src={`media://${activeQuestion.image_path}`} alt="Question prompt visual" style={{ maxWidth: '100%', maxHeight: '230px', objectFit: 'contain', borderRadius: '8px' }} />
+                  <img src={activeQuestion.image_path.startsWith('data:') ? activeQuestion.image_path : `media://${activeQuestion.image_path}`} alt="Question prompt visual" style={{ maxWidth: '100%', maxHeight: '230px', objectFit: 'contain', borderRadius: '8px' }} />
                 </div>
               )}
               <h2 className="child-question-prompt">{activeQuestion.text}</h2>

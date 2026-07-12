@@ -5,6 +5,7 @@ import AudioControl from '../components/common/AudioControl';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import { Plus, Download, Upload, Filter, Mic, Square, Play } from 'lucide-react';
+import useTTS from '../hooks/useTTS';
 
 export const QuestionBank = () => {
   const { showToast, refreshSyncInfo } = useApp();
@@ -31,6 +32,16 @@ export const QuestionBank = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [hasRecordedAudio, setHasRecordedAudio] = useState(false);
   const [audioPlaybackActive, setAudioPlaybackActive] = useState(false);
+
+  const tts = useTTS(newQuestionText);
+
+  const handleTestPlayback = () => {
+    if (!newQuestionText.trim()) {
+      showToast('Please enter question text before testing playback.', 'warning');
+      return;
+    }
+    tts.speak();
+  };
 
   // Filters mapping
   const [gradesList, setGradesList] = useState(['All']);
@@ -59,7 +70,7 @@ export const QuestionBank = () => {
     if (window.api) {
       const res = await window.api.selectImage();
       if (res.success) {
-        setImagePath(res.fileName);
+        setImagePath(res.dataUrl);
         showToast('Image attached successfully.', 'success');
       } else if (res.error && res.error !== 'Cancelled') {
         showToast(`Image selection failed: ${res.error}`, 'error');
@@ -354,7 +365,7 @@ export const QuestionBank = () => {
 
                   {q.image_path && (
                     <div className="qp-question-image-container" style={{ margin: '12px 0', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)', maxHeight: '200px', display: 'flex', justifyContent: 'center', background: 'var(--bg-secondary)' }}>
-                      <img src={`media://${q.image_path}`} alt="Question visual prompt" style={{ maxWidth: '100%', maxHeight: '200px', objectFit: 'contain' }} />
+                      <img src={q.image_path.startsWith('data:') ? q.image_path : `media://${q.image_path}`} alt="Question visual prompt" style={{ maxWidth: '100%', maxHeight: '200px', objectFit: 'contain' }} />
                     </div>
                   )}
 
@@ -484,18 +495,25 @@ export const QuestionBank = () => {
                   style={{ padding: '6px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', cursor: 'pointer', flexGrow: 1, textAlign: 'left' }}
                   onClick={handleSelectImage}
                 >
-                  {imagePath ? `✓ ${imagePath}` : 'Choose Image File...'}
+                  {imagePath ? (imagePath.startsWith('data:') ? '✓ Image Attached' : `✓ ${imagePath}`) : 'Choose Image File...'}
                 </button>
-                {imagePath && (
+              </div>
+              {imagePath && (
+                <div style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <img
+                    src={imagePath.startsWith('data:') ? imagePath : `media://${imagePath}`}
+                    alt="Preview"
+                    style={{ maxWidth: '80px', maxHeight: '50px', objectFit: 'contain', borderRadius: '4px', border: '1px solid var(--border-color)' }}
+                  />
                   <button
                     type="button"
-                    className="form-input"
-                    style={{ padding: '6px 12px', background: 'var(--danger-color)', color: '#fff', border: 'none', cursor: 'pointer', width: 'auto' }}
+                    style={{ padding: '6px 12px', background: 'var(--color-error, #ef4444)', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
                     onClick={() => setImagePath('')}
                   >
                     Remove
                   </button>
-                )}
+                </div>
+              )}
               </div>
             </div>
           </div>
@@ -537,15 +555,11 @@ export const QuestionBank = () => {
                 <div className="recorder-preview-controls">
                   <button
                     type="button"
-                    onClick={() => {
-                      setAudioPlaybackActive(true);
-                      setTimeout(() => setAudioPlaybackActive(false), 3000);
-                    }}
-                    disabled={audioPlaybackActive}
+                    onClick={handleTestPlayback}
                     className="recorder-preview-play"
                   >
                     <Play size={12} style={{ marginRight: '4px' }} />
-                    {audioPlaybackActive ? 'Playing...' : 'Test Playback'}
+                    {tts.isSpeaking ? 'Speaking...' : 'Test Playback'}
                   </button>
                 </div>
               )}

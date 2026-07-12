@@ -8,6 +8,7 @@ export const AppProvider = ({ children }) => {
   const [syncStatus, setSyncStatus] = useState('synced'); // 'synced', 'offline', 'syncing'
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [toasts, setToasts] = useState([]);
+  const [syncConflicts, setSyncConflicts] = useState([]);
   const [licenseKey, setLicenseKey] = useState('');
   const [licenseActive, setLicenseActive] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState(null);
@@ -94,15 +95,19 @@ export const AppProvider = ({ children }) => {
   };
 
   const showToast = (message, type = 'info') => {
-    const id = Date.now();
+    const id = `${Date.now()}-${Math.random()}`;
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 4000);
   };
 
-  const triggerSync = async () => {
-    if (syncStatus === 'offline') {
+  const removeToast = (id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  const triggerSync = async (options = {}) => {
+    if (isPhysicalOffline || syncStatus === 'offline') {
       showToast('Cannot sync in offline mode. Please switch to online first.', 'warning');
       return;
     }
@@ -112,9 +117,13 @@ export const AppProvider = ({ children }) => {
     showToast('Database synchronization started...', 'info');
 
     if (window.api) {
-      const res = await window.api.triggerSync();
+      const res = await window.api.triggerSync(options);
       if (res.success) {
         showToast('Sync completed! Offline database is fully up to date.', 'success');
+        setSyncConflicts([]);
+      } else if (res.hasConflicts) {
+        showToast('Sync paused. Conflicts detected between local and cloud databases.', 'warning');
+        setSyncConflicts(res.conflicts);
       } else {
         showToast(res.error || 'Sync failed.', 'error');
       }
@@ -207,6 +216,9 @@ export const AppProvider = ({ children }) => {
       toggleOnlineState,
       toasts,
       showToast,
+      removeToast,
+      syncConflicts,
+      setSyncConflicts,
       licenseKey,
       licenseActive,
       validateLicense,

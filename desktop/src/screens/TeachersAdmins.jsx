@@ -10,6 +10,7 @@ export const TeachersAdmins = () => {
   const { showToast, refreshSyncInfo } = useApp();
   const [teachers, setTeachers] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTeacher, setEditingTeacher] = useState(null);
 
   // Form states
   const [name, setName] = useState('');
@@ -21,7 +22,9 @@ export const TeachersAdmins = () => {
   const fetchTeachers = async () => {
     if (window.api) {
       const list = await window.api.getTeachers();
-      setTeachers(list);
+      // Filter out deleted staff members
+      const active = list.filter(t => t.status !== 'deleted');
+      setTeachers(active);
     }
   };
 
@@ -38,25 +41,61 @@ export const TeachersAdmins = () => {
     { key: 'status', label: 'Status', render: () => <Badge variant="success">Active</Badge> }
   ];
 
+  const handleOpenAdd = () => {
+    setEditingTeacher(null);
+    setName('');
+    setUsername('');
+    setPassword('');
+    setEmail('');
+    setRole('teacher');
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (teacher) => {
+    setEditingTeacher(teacher);
+    setName(teacher.name);
+    setUsername(teacher.username);
+    setPassword(''); // leave blank to keep unchanged
+    setEmail(teacher.email || '');
+    setRole(teacher.role);
+    setIsModalOpen(true);
+  };
+
+  const handleDeletePrompt = async (teacher) => {
+    if (confirm(`WARNING: Are you sure you want to delete staff member "${teacher.name}" (${teacher.role.toUpperCase()})? This will revoke their system access.`)) {
+      if (window.api) {
+        const res = await window.api.deleteTeacher(teacher.id);
+        if (res.success) {
+          showToast(`Staff member "${teacher.name}" deleted successfully.`, 'success');
+          fetchTeachers();
+          refreshSyncInfo();
+        } else {
+          showToast('Failed to delete staff member.', 'error');
+        }
+      }
+    }
+  };
+
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!name || !username || !password) {
+    if (e) e.preventDefault();
+    if (!name || !username || (!editingTeacher && !password)) {
       showToast('Please fill in name, username, and passcode.', 'error');
       return;
     }
 
-    const newFaculty = {
+    const teacherData = {
+      id: editingTeacher ? editingTeacher.id : undefined,
       name,
       username: username.toLowerCase().trim(),
-      password: password.trim(),
+      password: password.trim() || undefined,
       role,
       email: email.trim() || null
     };
 
     if (window.api) {
-      const res = await window.api.saveTeacher(newFaculty);
+      const res = await window.api.saveTeacher(teacherData);
       if (res.success) {
-        showToast(`Staff member ${name} created locally!`, 'success');
+        showToast(editingTeacher ? `Updated staff member "${name}" locally!` : `Staff member "${name}" created locally!`, 'success');
         fetchTeachers();
         refreshSyncInfo();
         setIsModalOpen(false);
@@ -65,6 +104,7 @@ export const TeachersAdmins = () => {
         setUsername('');
         setPassword('');
         setEmail('');
+        setEditingTeacher(null);
       } else {
         showToast(res.error || 'Failed to save staff member.', 'error');
       }
@@ -78,7 +118,7 @@ export const TeachersAdmins = () => {
           <h1 className="welcome-heading">Teachers & Administrators Console</h1>
           <p className="welcome-subtext">Manage school staff registry, assign primary roles, and configure credentials.</p>
         </div>
-        <Button variant="primary" onClick={() => setIsModalOpen(true)} icon={UserPlus}>
+        <Button variant="primary" onClick={handleOpenAdd} icon={UserPlus}>
           Add Faculty Member
         </Button>
       </div>
@@ -89,18 +129,20 @@ export const TeachersAdmins = () => {
           columns={tableColumns}
           searchPlaceholder="Search staff member name, username, or role..."
           itemsPerPage={6}
+          onEdit={handleOpenEdit}
+          onDelete={handleDeletePrompt}
         />
       </div>
 
       {/* Faculty Modal */}
       <Modal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title="Register Faculty Member"
+        onClose={() => { setIsModalOpen(false); setEditingTeacher(null); }}
+        title={editingTeacher ? 'Modify Faculty Details' : 'Register Faculty Member'}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>Cancel</Button>
-            <Button variant="primary" onClick={handleSubmit}>Create Faculty Record</Button>
+            <Button variant="secondary" onClick={() => { setIsModalOpen(false); setEditingTeacher(null); }}>Cancel</Button>
+            <Button variant="primary" onClick={handleSubmit}>{editingTeacher ? 'Save Changes' : 'Create Faculty Record'}</Button>
           </>
         }
       >
@@ -142,6 +184,7 @@ export const TeachersAdmins = () => {
               className="form-input"
               placeholder="e.g. sandra.teach"
               value={username}
+              disabled={!!editingTeacher}
               onChange={(e) => setUsername(e.target.value)}
             />
           </div>
@@ -151,7 +194,7 @@ export const TeachersAdmins = () => {
             <input
               type="password"
               className="form-input"
-              placeholder="••••••••"
+              placeholder={editingTeacher ? 'Leave blank to keep unchanged' : '••••••••'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
