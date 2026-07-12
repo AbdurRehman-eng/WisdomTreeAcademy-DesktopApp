@@ -22,9 +22,10 @@ export const QuestionBank = () => {
   const [optC, setOptC] = useState('');
   const [optD, setOptD] = useState('');
   const [correctOpt, setCorrectOpt] = useState('A');
-  const [formGrade, setFormGrade] = useState('Grade 1');
-  const [formSubject, setFormSubject] = useState('Mathematics');
+  const [formGrade, setFormGrade] = useState('');
+  const [formSubject, setFormSubject] = useState('');
   const [formDifficulty, setFormDifficulty] = useState('Medium');
+  const [imagePath, setImagePath] = useState('');
 
   // Mock audio recorder states
   const [isRecording, setIsRecording] = useState(false);
@@ -32,8 +33,8 @@ export const QuestionBank = () => {
   const [audioPlaybackActive, setAudioPlaybackActive] = useState(false);
 
   // Filters mapping
-  const gradesList = ['All', 'Nursery', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5'];
-  const subjectsList = ['All', 'Mathematics', 'English', 'Science'];
+  const [gradesList, setGradesList] = useState(['All']);
+  const [subjectsList, setSubjectsList] = useState(['All']);
   const difficultiesList = ['All', 'Easy', 'Medium', 'Hard'];
 
   const fetchQuestions = async () => {
@@ -47,13 +48,39 @@ export const QuestionBank = () => {
         text: q.text,
         options: q.options,
         correct: q.correct_answer,
-        audioText: q.audio_text || q.text
+        audioText: q.audio_text || q.text,
+        image_path: q.image_path
       }));
       setQuestions(mapped);
     }
   };
 
+  const handleSelectImage = async () => {
+    if (window.api) {
+      const res = await window.api.selectImage();
+      if (res.success) {
+        setImagePath(res.fileName);
+        showToast('Image attached successfully.', 'success');
+      } else if (res.error && res.error !== 'Cancelled') {
+        showToast(`Image selection failed: ${res.error}`, 'error');
+      }
+    }
+  };
+
   useEffect(() => {
+    const loadSetupData = async () => {
+      if (window.api) {
+        const clsList = await window.api.getClasses();
+        const subList = await window.api.getSubjects();
+        const gNames = clsList.map(c => c.name);
+        const sNames = subList.map(s => s.name);
+        setGradesList(['All', ...gNames]);
+        setSubjectsList(['All', ...sNames]);
+        if (gNames.length > 0) setFormGrade(gNames[0]);
+        if (sNames.length > 0) setFormSubject(sNames[0]);
+      }
+    };
+    loadSetupData();
     fetchQuestions();
   }, []);
 
@@ -93,7 +120,8 @@ export const QuestionBank = () => {
       text: newQuestionText,
       audioText: newQuestionText,
       options: [optA, optB, optC, optD],
-      correct_answer: correctOpt
+      correct_answer: correctOpt,
+      image_path: imagePath || null
     };
 
     if (window.api) {
@@ -111,6 +139,7 @@ export const QuestionBank = () => {
         setOptD('');
         setCorrectOpt('A');
         setHasRecordedAudio(false);
+        setImagePath('');
       } else {
         showToast(res.error || 'Failed to save question.', 'error');
       }
@@ -320,6 +349,12 @@ export const QuestionBank = () => {
 
                   <p className="qp-question-text">{q.text}</p>
 
+                  {q.image_path && (
+                    <div className="qp-question-image-container" style={{ margin: '12px 0', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border-color)', maxHeight: '200px', display: 'flex', justifyContent: 'center', background: 'var(--bg-secondary)' }}>
+                      <img src={`media://${q.image_path}`} alt="Question visual prompt" style={{ maxWidth: '100%', maxHeight: '200px', objectFit: 'contain' }} />
+                    </div>
+                  )}
+
                   {/* MCQ choices */}
                   <div className="qp-mcq-grid">
                     {q.options.map((opt, oIdx) => {
@@ -439,12 +474,26 @@ export const QuestionBank = () => {
 
             <div className="form-group" style={{ flexGrow: 2 }}>
               <label className="form-label">Illustrative Image Attachment (Optional)</label>
-              <input
-                type="file"
-                className="form-input"
-                style={{ padding: '6px' }}
-                onClick={(e) => { e.preventDefault(); showToast('Mock Attachment: File selector triggered.', 'info'); }}
-              />
+              <div className="flex gap-sm" style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="form-input"
+                  style={{ padding: '6px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', cursor: 'pointer', flexGrow: 1, textAlign: 'left' }}
+                  onClick={handleSelectImage}
+                >
+                  {imagePath ? `✓ ${imagePath}` : 'Choose Image File...'}
+                </button>
+                {imagePath && (
+                  <button
+                    type="button"
+                    className="form-input"
+                    style={{ padding: '6px 12px', background: 'var(--danger-color)', color: '#fff', border: 'none', cursor: 'pointer', width: 'auto' }}
+                    onClick={() => setImagePath('')}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 

@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('api', {
   // Authentication
   login: (username, password) => ipcRenderer.invoke('db:login', username, password),
   getCurrentUser: () => ipcRenderer.invoke('db:get-current-user'),
+  changePassword: (username, currentPassword, newPassword) => ipcRenderer.invoke('db:change-password', username, currentPassword, newPassword),
   
   // Students
   getStudents: () => ipcRenderer.invoke('db:get-students'),
@@ -50,6 +51,14 @@ contextBridge.exposeInMainWorld('api', {
   setSyncConfig: (projectUrl, apiKey) => ipcRenderer.invoke('sync:set-config', projectUrl, apiKey),
   getSyncConfig: () => ipcRenderer.invoke('sync:get-config'),
   getDashboardData: () => ipcRenderer.invoke('db:get-dashboard-data'),
+
+  // Images
+  selectImage: () => ipcRenderer.invoke('image:select'),
+
+  // Backup & Export
+  backupDatabase: () => ipcRenderer.invoke('db:backup'),
+  exportQuestions: () => ipcRenderer.invoke('db:export-questions'),
+  exportResults: () => ipcRenderer.invoke('db:export-results'),
 
   // Window Controls
   minimizeWindow: () => ipcRenderer.send('window:minimize'),

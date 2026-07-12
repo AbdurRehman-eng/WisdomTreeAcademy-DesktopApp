@@ -1,8 +1,13 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
+
+// Register custom media scheme for rendering local question images safely
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'media', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
+]);
 
 let mainWindow;
 let db;
@@ -29,12 +34,20 @@ function initDatabase() {
   const schemaPath = path.join(__dirname, 'db', 'schema.sql');
   const schema = fs.readFileSync(schemaPath, 'utf8');
   db.exec(schema);
+
+  // Alter question_bank table if image_path doesn't exist
+  const columns = db.prepare("PRAGMA table_info(question_bank)").all();
+  if (!columns.some(c => c.name === 'image_path')) {
+    db.prepare("ALTER TABLE question_bank ADD COLUMN image_path TEXT").run();
+  }
   
   // Seed initial data if empty
   seedDatabase();
 }
 
 function seedDatabase() {
+  const now = Date.now();
+
   // Check if admin exists
   const adminCheck = db.prepare("SELECT count(*) as count FROM teachers_admins WHERE role = 'admin'").get();
   if (adminCheck.count === 0) {
@@ -42,32 +55,43 @@ function seedDatabase() {
       INSERT INTO teachers_admins (id, username, password_hash, role, name, email, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    const now = Date.now();
     insertUser.run('A1', 'admin', hashPassword('admin123'), 'admin', 'System Administrator', 'admin@wisdomtree.edu', now);
     insertUser.run('T1', 'teacher', hashPassword('teacher123'), 'teacher', 'Teacher Williams', 'teacher@wisdomtree.edu', now);
   }
 
-  // Seed default classes if empty
-  const classCheck = db.prepare("SELECT count(*) as count FROM classes").get();
-  if (classCheck.count === 0) {
-    const insertClass = db.prepare("INSERT INTO classes (id, name, updated_at) VALUES (?, ?, ?)");
-    const now = Date.now();
-    const defaultClasses = ['Nursery', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5'];
-    defaultClasses.forEach((cls, i) => {
-      insertClass.run(`C${i+1}`, cls, now);
-    });
-  }
+  // Seed default classes dynamically to include Pre-K and Kindergarten
+  const defaultClasses = ['Pre-K', 'Kindergarten', 'Nursery', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5'];
+  const insertClass = db.prepare(`
+    INSERT INTO classes (id, name, status, sync_status, updated_at)
+    VALUES (?, ?, 'active', 'synced', ?)
+    ON CONFLICT(name) DO UPDATE SET status = 'active'
+  `);
+  defaultClasses.forEach((cls) => {
+    insertClass.run(`C_${cls.replace(/\s+/g, '_')}`, cls, now);
+  });
 
-  // Seed default subjects if empty
-  const subjectCheck = db.prepare("SELECT count(*) as count FROM subjects").get();
-  if (subjectCheck.count === 0) {
-    const insertSubj = db.prepare("INSERT INTO subjects (id, name, updated_at) VALUES (?, ?, ?)");
-    const now = Date.now();
-    const defaultSubjects = ['Mathematics', 'English', 'Science'];
-    defaultSubjects.forEach((sub, i) => {
-      insertSubj.run(`S${i+1}`, sub, now);
-    });
-  }
+  // Seed default subjects dynamically to include English diagnostic areas
+  const defaultSubjects = [
+    'Mathematics',
+    'Reading',
+    'Phonics',
+    'Vocabulary',
+    'Grammar',
+    'Spelling',
+    'Writing',
+    'Science'
+  ];
+  const insertSubj = db.prepare(`
+    INSERT INTO subjects (id, name, status, sync_status, updated_at)
+    VALUES (?, ?, 'active', 'synced', ?)
+    ON CONFLICT(name) DO UPDATE SET status = 'active'
+  `);
+  defaultSubjects.forEach((sub) => {
+    insertSubj.run(`S_${sub.replace(/\s+/g, '_')}`, sub, now);
+  });
+
+  // Deactivate the old 'English' subject since it is now split
+  db.prepare("UPDATE subjects SET status = 'deleted', updated_at = ? WHERE name = 'English'").run(now);
 
   // Seed default settings if empty
   const licenseCheck = db.prepare("SELECT count(*) as count FROM settings WHERE key = 'license_key'").get();
@@ -148,6 +172,25 @@ function registerIpcHandlers() {
         success: true,
         user: { id: user.id, username: user.username, role: user.role, name: user.name, email: user.email }
       };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('db:change-password', (event, username, currentPassword, newPassword) => {
+    try {
+      const user = db.prepare("SELECT * FROM teachers_admins WHERE username = ? AND status = 'active'").get(username);
+      if (!user) return { success: false, error: 'User not found or inactive.' };
+
+      const isValid = verifyPassword(currentPassword, user.password_hash);
+      if (!isValid) return { success: false, error: 'Incorrect current password.' };
+
+      const newHash = hashPassword(newPassword);
+      db.prepare("UPDATE teachers_admins SET password_hash = ?, sync_status = 'pending', updated_at = ? WHERE username = ?")
+        .run(newHash, new Date().toISOString(), username);
+
+      return { success: true };
     } catch (e) {
       console.error(e);
       return { success: false, error: e.message };
@@ -273,13 +316,13 @@ function registerIpcHandlers() {
     }));
   });
   ipcMain.handle('db:save-question', (event, q) => {
-    const { id, class: cls, subject, text, audioText, options, correct_answer } = q;
+    const { id, class: cls, subject, text, audioText, options, correct_answer, image_path } = q;
     const now = Date.now();
     const idToUse = id || crypto.randomUUID();
     const optionsJson = JSON.stringify(options);
     db.prepare(`
-      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, status, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
+      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, status, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
       ON CONFLICT(id) DO UPDATE SET
         class = excluded.class,
         subject = excluded.subject,
@@ -287,9 +330,10 @@ function registerIpcHandlers() {
         audio_text = excluded.audio_text,
         options_json = excluded.options_json,
         correct_answer = excluded.correct_answer,
+        image_path = excluded.image_path,
         sync_status = 'pending',
         updated_at = excluded.updated_at
-    `).run(idToUse, cls, subject, text, audioText, optionsJson, correct_answer, now);
+    `).run(idToUse, cls, subject, text, audioText, optionsJson, correct_answer, image_path || null, now);
     return { success: true, id: idToUse };
   });
   ipcMain.handle('db:delete-question', (event, id) => {
@@ -300,8 +344,8 @@ function registerIpcHandlers() {
   ipcMain.handle('db:import-questions', (event, questions) => {
     const now = Date.now();
     const insert = db.prepare(`
-      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, status, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
+      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, status, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
     `);
     
     const transaction = db.transaction((list) => {
@@ -314,6 +358,7 @@ function registerIpcHandlers() {
           q.audioText || '',
           JSON.stringify(q.options),
           q.correct,
+          q.image_path || null,
           now
         );
       }
@@ -649,10 +694,137 @@ function registerIpcHandlers() {
       };
     }
   });
+
+  ipcMain.handle('image:select', async () => {
+    const { dialog } = require('electron');
+    const { filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Select Question Image',
+      filters: [
+        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'gif', 'webp'] }
+      ],
+      properties: ['openFile']
+    });
+
+    if (!filePaths || filePaths.length === 0) {
+      return { success: false, error: 'Cancelled' };
+    }
+
+    try {
+      const selectedPath = filePaths[0];
+      const destDir = path.join(app.getPath('userData'), 'question_images');
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+      }
+
+      const fileExt = path.extname(selectedPath);
+      const fileName = `${crypto.randomUUID()}${fileExt}`;
+      const destPath = path.join(destDir, fileName);
+
+      fs.copyFileSync(selectedPath, destPath);
+
+      return { success: true, fileName: fileName };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('db:backup', async () => {
+    const { dialog } = require('electron');
+    const { filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Backup Local Database',
+      defaultPath: `wisdom_tree_backup_${Date.now()}.db`,
+      filters: [{ name: 'SQLite Database', extensions: ['db'] }]
+    });
+    if (!filePath) return { success: false, error: 'Cancelled' };
+    try {
+      const dbPath = path.join(app.getPath('userData'), 'wisdom_tree.db');
+      fs.copyFileSync(dbPath, filePath);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('db:export-questions', async () => {
+    const { dialog } = require('electron');
+    const { filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export Question Bank',
+      defaultPath: `question_bank_export_${Date.now()}.csv`,
+      filters: [{ name: 'CSV File', extensions: ['csv'] }]
+    });
+    if (!filePath) return { success: false, error: 'Cancelled' };
+    try {
+      const questions = db.prepare("SELECT * FROM question_bank WHERE status = 'active'").all();
+      let csvContent = 'id,class,subject,text,audio_text,options,correct_answer,image_path\n';
+      const escapeCSV = (str) => {
+        if (str === null || str === undefined) return '';
+        const s = String(str).replace(/"/g, '""');
+        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
+      };
+      for (const q of questions) {
+        let opts;
+        try {
+          opts = JSON.parse(q.options_json);
+        } catch (e) {
+          opts = [];
+        }
+        const optionsStr = opts.join('|');
+        csvContent += `${escapeCSV(q.id)},${escapeCSV(q.class)},${escapeCSV(q.subject)},${escapeCSV(q.text)},${escapeCSV(q.audio_text)},${escapeCSV(optionsStr)},${escapeCSV(q.correct_answer)},${escapeCSV(q.image_path)}\n`;
+      }
+      fs.writeFileSync(filePath, csvContent, 'utf8');
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('db:export-results', async () => {
+    const { dialog } = require('electron');
+    const { filePath } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Export Student Results',
+      defaultPath: `student_results_export_${Date.now()}.csv`,
+      filters: [{ name: 'CSV File', extensions: ['csv'] }]
+    });
+    if (!filePath) return { success: false, error: 'Cancelled' };
+    try {
+      const assessments = db.prepare(`
+        SELECT a.*, s.name as student_name, s.roll_number as student_roll, s.class as student_class
+        FROM assessments a
+        JOIN students s ON a.student_id = s.id
+        ORDER BY a.updated_at DESC
+      `).all();
+      
+      let csvContent = 'assessment_id,student_name,roll_number,class,date,score,total_questions,percentage\n';
+      const escapeCSV = (str) => {
+        if (str === null || str === undefined) return '';
+        const s = String(str).replace(/"/g, '""');
+        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s}"` : s;
+      };
+      for (const a of assessments) {
+        const pct = Math.round((a.score / a.total_questions) * 100);
+        csvContent += `${escapeCSV(a.id)},${escapeCSV(a.student_name)},${escapeCSV(a.student_roll)},${escapeCSV(a.student_class)},${escapeCSV(a.date)},${escapeCSV(a.score)},${escapeCSV(a.total_questions)},${pct}%\n`;
+      }
+      fs.writeFileSync(filePath, csvContent, 'utf8');
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
 }
 
 // App lifecycle
 app.whenReady().then(() => {
+  // Register media custom protocol handler for safe local image loading
+  protocol.handle('media', (request) => {
+    const urlPath = request.url.replace('media://', '');
+    const decodedPath = decodeURIComponent(urlPath);
+    const filePath = path.join(app.getPath('userData'), 'question_images', decodedPath);
+    const { pathToFileURL } = require('url');
+    const { net } = require('electron');
+    return net.fetch(pathToFileURL(filePath).toString());
+  });
+
   initDatabase();
   registerIpcHandlers();
   createWindow();

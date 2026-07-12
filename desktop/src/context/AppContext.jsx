@@ -148,6 +148,36 @@ export const AppProvider = ({ children }) => {
     return false;
   };
 
+  useEffect(() => {
+    const handleOnline = () => {
+      showToast('Internet connection restored. Synchronizing data...', 'success');
+      if (syncStatus !== 'offline') {
+        triggerSync();
+      }
+    };
+
+    const handleOffline = () => {
+      showToast('Internet connection lost. Working in offline mode.', 'warning');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Auto-sync on mount if online
+    let timer;
+    if (navigator.onLine && syncStatus !== 'offline') {
+      timer = setTimeout(() => {
+        triggerSync();
+      }, 1000);
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [syncStatus]);
+
   return (
     <AppContext.Provider value={{
       user,

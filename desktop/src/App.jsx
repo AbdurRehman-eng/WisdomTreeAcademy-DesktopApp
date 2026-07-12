@@ -18,6 +18,20 @@ import Attendance from './screens/Attendance';
 import Reports from './screens/Reports';
 import SyncSettings from './screens/SyncSettings';
 
+const screenRoles = {
+  'dashboard': ['admin', 'teacher'],
+  'students': ['admin', 'teacher'],
+  'teachers-admins': ['admin'],
+  'classes-subjects': ['admin'],
+  'question-bank': ['admin', 'teacher'],
+  'assessment-setup': ['admin', 'teacher'],
+  'assessment-runner': ['admin', 'teacher'],
+  'assessment-results': ['admin', 'teacher'],
+  'attendance': ['admin', 'teacher'],
+  'reports': ['admin'],
+  'sync-settings': ['admin']
+};
+
 function MainAppContent() {
   const { user, activeScreen } = useApp();
 
@@ -28,6 +42,11 @@ function MainAppContent() {
 
   // State-based Screen Router
   const renderScreen = () => {
+    const allowedRoles = screenRoles[activeScreen] || ['admin', 'teacher'];
+    if (!allowedRoles.includes(user.role)) {
+      return <Dashboard />;
+    }
+
     switch (activeScreen) {
       case 'login':
         return <Login />;

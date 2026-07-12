@@ -19,7 +19,96 @@ import {
   Key
 } from 'lucide-react';
 
+async function hashPasswordBrowser(password) {
+  const saltBytes = window.crypto.getRandomValues(new Uint8Array(16));
+  const salt = Array.from(saltBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+  const encoder = new TextEncoder();
+  const passwordBuffer = encoder.encode(password);
+
+  const baseKey = await window.crypto.subtle.importKey(
+    'raw',
+    passwordBuffer,
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits', 'deriveKey']
+  );
+
+  const saltBuffer = encoder.encode(salt);
+
+  const derivedBits = await window.crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: saltBuffer,
+      iterations: 1000,
+      hash: 'SHA-512'
+    },
+    baseKey,
+    512
+  );
+
+  const hash = Array.from(new Uint8Array(derivedBits))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  return `${salt}:${hash}`;
+}
+
 export default function App() {
+  // Staff Password Reset Modal State
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState(null);
+  const [newStaffPassword, setNewStaffPassword] = useState('');
+  const [confirmStaffPassword, setConfirmStaffPassword] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
+
+  const handleOpenResetPassword = (staff) => {
+    setSelectedStaff(staff);
+    setNewStaffPassword('');
+    setConfirmStaffPassword('');
+    setShowPasswordModal(true);
+  };
+
+  const handleSaveStaffPassword = async (e) => {
+    e.preventDefault();
+    if (!newStaffPassword || !confirmStaffPassword) {
+      alert('Please fill in both fields.');
+      return;
+    }
+    if (newStaffPassword !== confirmStaffPassword) {
+      alert('Passwords do not match.');
+      return;
+    }
+    if (newStaffPassword.length < 6) {
+      alert('Password must be at least 6 characters long.');
+      return;
+    }
+
+    setResettingPassword(true);
+    try {
+      const passwordHash = await hashPasswordBrowser(newStaffPassword);
+      const client = createClient(supabaseUrl, supabaseKey);
+      const { error } = await client
+        .from('teachers_admins')
+        .update({
+          password_hash: passwordHash,
+          sync_status: 'synced',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedStaff.id);
+
+      if (error) throw error;
+
+      alert(`Password for ${selectedStaff.name} updated successfully.`);
+      setShowPasswordModal(false);
+      loadDashboardData(client);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to reset password: ' + err.message);
+    } finally {
+      setResettingPassword(false);
+    }
+  };
   // Theme state
   const [darkTheme, setDarkTheme] = useState(() => {
     return localStorage.getItem('owner-theme') === 'dark';
@@ -705,6 +794,7 @@ export default function App() {
                     <th>System Role</th>
                     <th>Email Address</th>
                     <th>Status</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -723,11 +813,31 @@ export default function App() {
                           {t.status}
                         </span>
                       </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <button
+                          onClick={() => handleOpenResetPassword(t)}
+                          className="btn btn-secondary"
+                          style={{
+                            padding: '6px 10px',
+                            fontSize: '11px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            background: 'var(--bg-app)',
+                            border: '1px solid var(--border-color)',
+                            color: 'var(--text-primary)',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Key size={12} /> Reset Password
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {teachers.length === 0 && (
                     <tr>
-                      <td colSpan="5" className="text-center" style={{ color: 'var(--text-secondary)' }}>
+                      <td colSpan="6" className="text-center" style={{ color: 'var(--text-secondary)' }}>
                         No staff accounts registered.
                       </td>
                     </tr>
@@ -1317,6 +1427,77 @@ export default function App() {
                   disabled={isSavingQuestion}
                 >
                   {isSavingQuestion ? 'Saving...' : editingQuestion ? 'Update Question' : 'Save Question'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* STAFF PASSWORD RESET MODAL */}
+      {showPasswordModal && selectedStaff && (
+        <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '450px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Reset Password</h3>
+              <button className="close-btn" onClick={() => setShowPasswordModal(false)}>&times;</button>
+            </div>
+
+            <form onSubmit={handleSaveStaffPassword}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px', fontSize: '13px' }}>
+                <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                  Changing password for staff account: <strong>{selectedStaff.name} ({selectedStaff.username})</strong>.
+                </p>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>New Password</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    value={newStaffPassword}
+                    onChange={e => setNewStaffPassword(e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>Confirm Password</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    value={confirmStaffPassword}
+                    onChange={e => setConfirmStaffPassword(e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowPasswordModal(false)}
+                  disabled={resettingPassword}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{
+                    backgroundColor: 'var(--color-primary, #6366f1)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '8px 16px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                  disabled={resettingPassword}
+                >
+                  {resettingPassword ? 'Resetting...' : 'Change Password'}
                 </button>
               </div>
             </form>

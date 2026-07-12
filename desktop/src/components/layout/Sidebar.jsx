@@ -32,12 +32,12 @@ export const Sidebar = () => {
     { id: 'teachers-admins', label: 'Teachers & Admins', icon: ShieldCheck, roles: ['admin'] },
     { id: 'classes-subjects', label: 'Classes & Subjects', icon: School, roles: ['admin'] },
     { id: 'question-bank', label: 'Question Bank', icon: Database, roles: ['admin', 'teacher'] },
-    { id: 'assessment-setup', label: 'Assessment Setup', icon: ClipboardList, roles: ['teacher'] },
+    { id: 'assessment-setup', label: 'Assessment Setup', icon: ClipboardList, roles: ['admin', 'teacher'] },
     { id: 'assessment-runner', label: 'Assessment Runner', icon: PlayCircle, roles: ['admin', 'teacher'] },
     { id: 'assessment-results', label: 'Assessment Results', icon: BarChart3, roles: ['admin', 'teacher'] },
     { id: 'attendance', label: 'Attendance', icon: CalendarDays, roles: ['admin', 'teacher'] },
-    { id: 'reports', label: 'Reports Center', icon: FileText, roles: ['admin', 'teacher'] },
-    { id: 'sync-settings', label: 'Sync & Settings', icon: Sliders, roles: ['admin', 'teacher'] }
+    { id: 'reports', label: 'Reports Center', icon: FileText, roles: ['admin'] },
+    { id: 'sync-settings', label: 'Sync & Settings', icon: Sliders, roles: ['admin'] }
   ];
 
   // Filter items based on user role

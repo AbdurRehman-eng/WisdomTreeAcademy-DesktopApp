@@ -13,8 +13,9 @@ export const Students = () => {
 
   // Form states
   const [name, setName] = useState('');
-  const [grade, setGrade] = useState('Grade 1');
+  const [grade, setGrade] = useState('');
   const [rollNumber, setRollNumber] = useState('');
+  const [grades, setGrades] = useState([]);
 
   const fetchStudents = async () => {
     if (window.api) {
@@ -31,6 +32,17 @@ export const Students = () => {
 
   useEffect(() => {
     fetchStudents();
+    const loadGrades = async () => {
+      if (window.api) {
+        const clsList = await window.api.getClasses();
+        const names = clsList.map(c => c.name);
+        setGrades(names);
+        if (names.length > 0) {
+          setGrade(names[0]);
+        }
+      }
+    };
+    loadGrades();
   }, []);
 
   const tableColumns = [
@@ -137,12 +149,9 @@ export const Students = () => {
           <div className="form-group">
             <label className="form-label">Grade / Classroom Assignment</label>
             <select className="form-select" value={grade} onChange={(e) => setGrade(e.target.value)}>
-              <option value="Nursery">Nursery</option>
-              <option value="Grade 1">Grade 1</option>
-              <option value="Grade 2">Grade 2</option>
-              <option value="Grade 3">Grade 3</option>
-              <option value="Grade 4">Grade 4</option>
-              <option value="Grade 5">Grade 5</option>
+              {grades.map(g => (
+                <option key={g} value={g}>{g}</option>
+              ))}
             </select>
           </div>
         </form>
