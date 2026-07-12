@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 
 const AppContext = createContext();
 
@@ -11,6 +11,12 @@ export const AppProvider = ({ children }) => {
   const [licenseKey, setLicenseKey] = useState('');
   const [licenseActive, setLicenseActive] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState(null);
+  const [isPhysicalOffline, setIsPhysicalOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+
+  const syncStatusRef = useRef(syncStatus);
+  useEffect(() => {
+    syncStatusRef.current = syncStatus;
+  }, [syncStatus]);
 
   // Load user session from local storage on load
   useEffect(() => {
@@ -117,6 +123,10 @@ export const AppProvider = ({ children }) => {
   };
 
   const toggleOnlineState = async () => {
+    if (isPhysicalOffline) {
+      showToast('Cannot go online. No internet connection detected.', 'warning');
+      return;
+    }
     if (window.api) {
       const res = await window.api.toggleOnline();
       if (res.success) {
@@ -126,7 +136,7 @@ export const AppProvider = ({ children }) => {
             ? 'System is now Offline. Working locally.' 
             : 'System is now Online. Cloud sync is active.',
           res.status === 'offline' ? 'warning' : 'info'
-        );
+         );
       }
     }
   };
@@ -150,13 +160,15 @@ export const AppProvider = ({ children }) => {
 
   useEffect(() => {
     const handleOnline = () => {
+      setIsPhysicalOffline(false);
       showToast('Internet connection restored. Synchronizing data...', 'success');
-      if (syncStatus !== 'offline') {
+      if (syncStatusRef.current !== 'offline') {
         triggerSync();
       }
     };
 
     const handleOffline = () => {
+      setIsPhysicalOffline(true);
       showToast('Internet connection lost. Working in offline mode.', 'warning');
     };
 
@@ -165,7 +177,7 @@ export const AppProvider = ({ children }) => {
 
     // Auto-sync on mount if online
     let timer;
-    if (navigator.onLine && syncStatus !== 'offline') {
+    if (navigator.onLine && syncStatusRef.current !== 'offline') {
       timer = setTimeout(() => {
         triggerSync();
       }, 1000);
@@ -176,7 +188,9 @@ export const AppProvider = ({ children }) => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [syncStatus]);
+  }, []);
+
+  const effectiveSyncStatus = isPhysicalOffline ? 'offline' : syncStatus;
 
   return (
     <AppContext.Provider value={{
@@ -185,7 +199,7 @@ export const AppProvider = ({ children }) => {
       setScreen,
       login,
       logout,
-      syncStatus,
+      syncStatus: effectiveSyncStatus,
       setSyncStatus,
       pendingSyncCount,
       refreshSyncInfo,
