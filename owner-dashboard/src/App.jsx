@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import {
   Users,
+  User,
   Award,
   Calendar,
   Grid,
@@ -66,6 +67,21 @@ export default function App() {
   const [loginUsername, setLoginUsername] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+
+  const [adminUsername, setAdminUsername] = useState(() => {
+    return localStorage.getItem('owner-username') || 'superadmin';
+  });
+  const [adminPassword, setAdminPassword] = useState(() => {
+    return localStorage.getItem('owner-password') || 'superadmin123';
+  });
+
+  const [profileUsername, setProfileUsername] = useState(adminUsername);
+  const [profilePassword, setProfilePassword] = useState(adminPassword);
+
+  useEffect(() => {
+    setProfileUsername(adminUsername);
+    setProfilePassword(adminPassword);
+  }, [adminUsername, adminPassword]);
 
   // Modals for Student & Staff Creation State
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
@@ -501,11 +517,66 @@ export default function App() {
     }
   };
 
+  const handleUpdateProfile = (e) => {
+    e.preventDefault();
+    if (!profileUsername.trim() || !profilePassword.trim()) {
+      alert('Username and password cannot be empty.');
+      return;
+    }
+    setAdminUsername(profileUsername.trim());
+    setAdminPassword(profilePassword.trim());
+    localStorage.setItem('owner-username', profileUsername.trim());
+    localStorage.setItem('owner-password', profilePassword.trim());
+    alert('Security profile updated successfully!');
+  };
+
+  const handleDeleteStaff = async (staff) => {
+    if (!window.confirm(`Warning: Are you sure you want to delete staff account "${staff.name}" (${staff.username})? This action will set their status to deleted.`)) {
+      return;
+    }
+
+    const client = createClient(supabaseUrl, supabaseKey);
+    try {
+      const { error } = await client
+        .from('teachers_admins')
+        .update({ status: 'deleted', updated_at: Date.now() })
+        .eq('id', staff.id);
+
+      if (error) throw error;
+
+      alert(`Staff account "${staff.name}" has been deleted.`);
+      loadDashboardData(client);
+    } catch (err) {
+      alert('Failed to delete staff account: ' + err.message);
+    }
+  };
+
+  const handleDeleteStudent = async (student) => {
+    if (!window.confirm(`Warning: Are you sure you want to delete student "${student.name}" (Roll No: ${student.roll_number})? This action will set their status to deleted.`)) {
+      return;
+    }
+
+    const client = createClient(supabaseUrl, supabaseKey);
+    try {
+      const { error } = await client
+        .from('students')
+        .update({ status: 'deleted', updated_at: Date.now() })
+        .eq('id', student.id);
+
+      if (error) throw error;
+
+      alert(`Student "${student.name}" has been deleted.`);
+      loadDashboardData(client);
+    } catch (err) {
+      alert('Failed to delete student: ' + err.message);
+    }
+  };
+
   // Helper Stats Calculation
-  const totalStudents = students.length;
+  const totalStudents = students.filter(s => s.status === 'active' || !s.status).length;
   const totalAssessments = assessments.length;
   const totalQuestions = questions.length;
-  const totalTeachers = teachers.filter(t => t.role === 'teacher').length;
+  const totalTeachers = teachers.filter(t => t.role === 'teacher' && (t.status === 'active' || !t.status)).length;
 
   const schoolAverage = (() => {
     if (assessments.length === 0) return 0;
@@ -527,7 +598,7 @@ export default function App() {
     const matchesSearch = s.name?.toLowerCase().includes(studentSearch.toLowerCase()) || 
                           s.roll_number?.toLowerCase().includes(studentSearch.toLowerCase());
     const matchesClass = classFilter === 'All' || s.class === classFilter;
-    return matchesSearch && matchesClass;
+    return matchesSearch && matchesClass && (s.status === 'active' || !s.status);
   });
 
   const activityLogs = (() => {
@@ -624,7 +695,7 @@ export default function App() {
 
           <form onSubmit={(e) => {
             e.preventDefault();
-            if (loginUsername === 'superadmin' && loginPassword === 'superadmin123') {
+            if (loginUsername === adminUsername && loginPassword === adminPassword) {
               setIsAuthenticated(true);
               sessionStorage.setItem('owner-authenticated', 'true');
               setLoginError('');
@@ -841,6 +912,16 @@ export default function App() {
                 <span>Issue License Key</span>
               </button>
             </li>
+            <li>
+              <button
+                className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`}
+                onClick={() => setActiveTab('profile')}
+                style={{ width: '100%', display: 'flex', alignItems: 'center' }}
+              >
+                <User size={18} />
+                <span>Console Profile</span>
+              </button>
+            </li>
           </ul>
         </nav>
 
@@ -887,7 +968,7 @@ export default function App() {
               {activeTab === 'attendance' && 'Student & Teacher Attendance Audit'}
               {activeTab === 'logs' && 'Franchise Activity & Operations Audit Logs'}
               {activeTab === 'licensing' && 'Offline License Key Generator'}
-              {activeTab === 'settings' && 'Supabase Cluster Settings'}
+              {activeTab === 'profile' && 'Owner Console Security Profile'}
             </h2>
             <p className="header-subtitle">
               {isConnected ? (
@@ -1000,7 +1081,7 @@ export default function App() {
                 <h3 className="card-title">Classroom Roster Distribution</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '8px' }}>
                   {['Nursery', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5'].map(cls => {
-                    const count = students.filter(s => s.class === cls).length;
+                    const count = students.filter(s => s.class === cls && (s.status === 'active' || !s.status)).length;
                     const percent = totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0;
                     return (
                       <div key={cls}>
@@ -1076,6 +1157,7 @@ export default function App() {
                     <th>Full Name</th>
                     <th>Grade Level</th>
                     <th>Status</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1085,15 +1167,35 @@ export default function App() {
                       <td><strong>{s.name}</strong></td>
                       <td>{s.class}</td>
                       <td>
-                        <span className={`badge ${s.status === 'active' ? 'badge-success' : 'badge-error'}`}>
-                          {s.status}
+                        <span className={`badge ${(s.status === 'active' || !s.status) ? 'badge-success' : 'badge-error'}`}>
+                          {s.status || 'active'}
                         </span>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <button
+                          onClick={() => handleDeleteStudent(s)}
+                          className="btn btn-secondary"
+                          style={{
+                            padding: '6px 10px',
+                            fontSize: '11px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            background: 'rgba(239, 68, 68, 0.08)',
+                            border: '1px solid rgba(239, 68, 68, 0.2)',
+                            color: 'var(--color-error)',
+                            borderRadius: '4px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Trash2 size={12} /> Delete
+                        </button>
                       </td>
                     </tr>
                   ))}
                   {filteredStudents.length === 0 && (
                     <tr>
-                      <td colSpan="4" className="text-center" style={{ color: 'var(--text-secondary)' }}>
+                      <td colSpan="5" className="text-center" style={{ color: 'var(--text-secondary)' }}>
                         No matching student records found.
                       </td>
                     </tr>
@@ -1139,7 +1241,7 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody>
-                  {teachers.map(t => (
+                  {teachers.filter(t => t.status === 'active' || !t.status).map(t => (
                     <tr key={t.id}>
                       <td style={{ fontFamily: 'monospace' }}>{t.username}</td>
                       <td><strong>{t.name}</strong></td>
@@ -1150,36 +1252,56 @@ export default function App() {
                       </td>
                       <td>{t.email || 'N/A'}</td>
                       <td>
-                        <span className={`badge ${t.status === 'active' ? 'badge-success' : 'badge-error'}`}>
-                          {t.status}
+                        <span className={`badge ${(t.status === 'active' || !t.status) ? 'badge-success' : 'badge-error'}`}>
+                          {t.status || 'active'}
                         </span>
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <button
-                          onClick={() => handleOpenResetPassword(t)}
-                          className="btn btn-secondary"
-                          style={{
-                            padding: '6px 10px',
-                            fontSize: '11px',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            background: 'var(--bg-app)',
-                            border: '1px solid var(--border-color)',
-                            color: 'var(--text-primary)',
-                            borderRadius: '4px',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Key size={12} /> Reset Password
-                        </button>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => handleOpenResetPassword(t)}
+                            className="btn btn-secondary"
+                            style={{
+                              padding: '6px 10px',
+                              fontSize: '11px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              background: 'var(--bg-app)',
+                              border: '1px solid var(--border-color)',
+                              color: 'var(--text-primary)',
+                              borderRadius: '4px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Key size={12} /> Reset Password
+                          </button>
+                          <button
+                            onClick={() => handleDeleteStaff(t)}
+                            className="btn btn-secondary"
+                            style={{
+                              padding: '6px 10px',
+                              fontSize: '11px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              background: 'rgba(239, 68, 68, 0.08)',
+                              border: '1px solid rgba(239, 68, 68, 0.2)',
+                              color: 'var(--color-error)',
+                              borderRadius: '4px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
-                  {teachers.length === 0 && (
+                  {teachers.filter(t => t.status === 'active' || !t.status).length === 0 && (
                     <tr>
                       <td colSpan="6" className="text-center" style={{ color: 'var(--text-secondary)' }}>
-                        No staff accounts registered.
+                        No active staff accounts registered.
                       </td>
                     </tr>
                   )}
@@ -1626,6 +1748,53 @@ export default function App() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+
+        {/* CONSOLE PROFILE TAB */}
+        {activeTab === 'profile' && (
+          <div className="card fade-in" style={{ maxWidth: '500px', margin: '0 auto' }}>
+            <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Lock size={20} className="color-primary" />
+              Console Security Profile
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
+              Update the administrative login credentials for this owner console. These credentials are saved securely in your local browser cache.
+            </p>
+
+            <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 'bold' }}>Console Username</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={profileUsername}
+                  onChange={e => setProfileUsername(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 'bold' }}>Console Password</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="Enter new password"
+                  value={profilePassword}
+                  onChange={e => setProfilePassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="btn btn-primary"
+                style={{ width: '100%', padding: '12px', fontWeight: 600, marginTop: '8px' }}
+              >
+                Save Profile Changes
+              </button>
+            </form>
           </div>
         )}
       </main>

@@ -55,6 +55,12 @@ function initDatabase() {
   } catch (err) {
     console.error("Migration error for attendance index:", err);
   }
+  // Set default seeded accounts to 'pending' sync_status if they are currently set to 'synced'
+  try {
+    db.prepare("UPDATE teachers_admins SET sync_status = 'pending' WHERE username IN ('admin', 'teacher') AND sync_status = 'synced'").run();
+  } catch (err) {
+    console.error("Migration error for default accounts sync status:", err);
+  }
   
   // Seed initial data if empty
   seedDatabase();
@@ -67,8 +73,8 @@ function seedDatabase() {
   const adminCheck = db.prepare("SELECT count(*) as count FROM teachers_admins WHERE role = 'admin'").get();
   if (adminCheck.count === 0) {
     const insertUser = db.prepare(`
-      INSERT INTO teachers_admins (id, username, password_hash, role, name, email, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO teachers_admins (id, username, password_hash, role, name, email, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
     `);
     insertUser.run('A1', 'admin', hashPassword('admin123'), 'admin', 'System Administrator', 'admin@wisdomtree.edu', now);
     insertUser.run('T1', 'teacher', hashPassword('teacher123'), 'teacher', 'Teacher Williams', 'teacher@wisdomtree.edu', now);
