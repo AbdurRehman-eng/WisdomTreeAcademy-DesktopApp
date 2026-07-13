@@ -113,11 +113,19 @@ export const AppProvider = ({ children }) => {
     }
     if (syncStatus === 'syncing') return;
 
+    // Sanitize options to avoid passing React SyntheticEvent objects through the IPC bridge
+    let cleanOptions = {};
+    if (options && typeof options === 'object' && !options.nativeEvent) {
+      if (options.force !== undefined) cleanOptions.force = options.force;
+      if (options.overwriteCloud !== undefined) cleanOptions.overwriteCloud = options.overwriteCloud;
+      if (options.keepCloud !== undefined) cleanOptions.keepCloud = options.keepCloud;
+    }
+
     setSyncStatus('syncing');
     showToast('Database synchronization started...', 'info');
 
     if (window.api) {
-      const res = await window.api.triggerSync(options);
+      const res = await window.api.triggerSync(cleanOptions);
       if (res.success) {
         showToast('Sync completed! Offline database is fully up to date.', 'success');
         setSyncConflicts([]);

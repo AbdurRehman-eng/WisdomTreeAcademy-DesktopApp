@@ -824,8 +824,17 @@ app.whenReady().then(() => {
   // Register media custom protocol handler for safe local image loading
   protocol.handle('media', (request) => {
     const urlPath = request.url.replace('media://', '');
-    const decodedPath = decodeURIComponent(urlPath);
+    let decodedPath = decodeURIComponent(urlPath);
+    // Trim trailing slash added by browser URL host normalization
+    if (decodedPath.endsWith('/')) {
+      decodedPath = decodedPath.slice(0, -1);
+    }
     const filePath = path.join(app.getPath('userData'), 'question_images', decodedPath);
+    
+    if (!fs.existsSync(filePath)) {
+      return new Response('Not Found', { status: 404 });
+    }
+
     const { pathToFileURL } = require('url');
     const { net } = require('electron');
     return net.fetch(pathToFileURL(filePath).toString());
