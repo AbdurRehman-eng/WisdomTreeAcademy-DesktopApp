@@ -87,7 +87,7 @@ export default function App() {
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [studentName, setStudentName] = useState('');
   const [studentRollNumber, setStudentRollNumber] = useState('');
-  const [studentClass, setStudentClass] = useState('Nursery');
+  const [studentClass, setStudentClass] = useState('Pre-K');
   const [isSavingStudent, setIsSavingStudent] = useState(false);
 
   const [showAddStaffModal, setShowAddStaffModal] = useState(false);
@@ -164,7 +164,7 @@ export default function App() {
   // Question CRUD Modal state
   const [showQuestionModal, setShowQuestionModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
-  const [qClass, setQClass] = useState('Nursery');
+  const [qClass, setQClass] = useState('Pre-K');
   const [qSubject, setQSubject] = useState('Mathematics');
   const [qText, setQText] = useState('');
   const [qOptA, setQOptA] = useState('');
@@ -328,7 +328,7 @@ export default function App() {
 
   const handleOpenAddQuestion = () => {
     setEditingQuestion(null);
-    setQClass('Nursery');
+    setQClass('Pre-K');
     setQSubject('Mathematics');
     setQText('');
     setQOptA('');
@@ -1080,7 +1080,7 @@ export default function App() {
               <div className="card">
                 <h3 className="card-title">Classroom Roster Distribution</h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '8px' }}>
-                  {['Nursery', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5'].map(cls => {
+                  {['Pre-K', 'Kindergarten', 'Nursery', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5'].map(cls => {
                     const count = students.filter(s => s.class === cls && (s.status === 'active' || !s.status)).length;
                     const percent = totalStudents > 0 ? Math.round((count / totalStudents) * 100) : 0;
                     return (
@@ -1122,6 +1122,8 @@ export default function App() {
                     onChange={e => setClassFilter(e.target.value)}
                   >
                     <option value="All">All Grades</option>
+                    <option value="Pre-K">Pre-K</option>
+                    <option value="Kindergarten">Kindergarten</option>
                     <option value="Nursery">Nursery</option>
                     <option value="Grade 1">Grade 1</option>
                     <option value="Grade 2">Grade 2</option>
@@ -1138,7 +1140,7 @@ export default function App() {
                   onClick={() => {
                     setStudentName('');
                     setStudentRollNumber('');
-                    setStudentClass('Nursery');
+                    setStudentClass('Pre-K');
                     setShowAddStudentModal(true);
                   }}
                   style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
@@ -1919,6 +1921,8 @@ export default function App() {
                       onChange={e => setQClass(e.target.value)}
                       style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
                     >
+                      <option value="Pre-K">Pre-K</option>
+                      <option value="Kindergarten">Kindergarten</option>
                       <option value="Nursery">Nursery</option>
                       <option value="Grade 1">Grade 1</option>
                       <option value="Grade 2">Grade 2</option>
@@ -1936,7 +1940,12 @@ export default function App() {
                       style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
                     >
                       <option value="Mathematics">Mathematics</option>
-                      <option value="English">English</option>
+                      <option value="Reading">Reading</option>
+                      <option value="Phonics">Phonics</option>
+                      <option value="Vocabulary">Vocabulary</option>
+                      <option value="Grammar">Grammar</option>
+                      <option value="Spelling">Spelling</option>
+                      <option value="Writing">Writing</option>
                       <option value="Science">Science</option>
                     </select>
                   </div>
@@ -2200,6 +2209,8 @@ export default function App() {
                     onChange={e => setStudentClass(e.target.value)}
                     style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
                   >
+                    <option value="Pre-K">Pre-K</option>
+                    <option value="Kindergarten">Kindergarten</option>
                     <option value="Nursery">Nursery</option>
                     <option value="Grade 1">Grade 1</option>
                     <option value="Grade 2">Grade 2</option>
