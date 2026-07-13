@@ -36,7 +36,7 @@ export const Sidebar = () => {
     { id: 'assessment-runner', label: 'Assessment Runner', icon: PlayCircle, roles: ['admin', 'teacher'] },
     { id: 'assessment-results', label: 'Assessment Results', icon: BarChart3, roles: ['admin', 'teacher'] },
     { id: 'attendance', label: 'Attendance', icon: CalendarDays, roles: ['admin', 'teacher'] },
-    { id: 'reports', label: 'Reports Center', icon: FileText, roles: ['admin'] },
+    { id: 'reports', label: 'Reports Center', icon: FileText, roles: ['admin', 'teacher'] },
     { id: 'sync-settings', label: 'Sync & Settings', icon: Sliders, roles: ['admin'] }
   ];
 

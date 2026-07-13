@@ -28,7 +28,7 @@ const screenRoles = {
   'assessment-runner': ['admin', 'teacher'],
   'assessment-results': ['admin', 'teacher'],
   'attendance': ['admin', 'teacher'],
-  'reports': ['admin'],
+  'reports': ['admin', 'teacher'],
   'sync-settings': ['admin']
 };
 
