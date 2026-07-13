@@ -291,7 +291,7 @@ export default function App() {
       setIsConnected(true);
       
       // Load all data
-      loadDashboardData(client);
+      await loadDashboardData(client);
     } catch (err) {
       setConnectionError(err.message || 'Could not establish connection to Supabase.');
       setIsConnected(false);
@@ -348,6 +348,12 @@ export default function App() {
         client.from('question_bank').select('*')
       ]);
 
+      if (resStudents.error) throw resStudents.error;
+      if (resTeachers.error) throw resTeachers.error;
+      if (resAssessments.error) throw resAssessments.error;
+      if (resAttendance.error) throw resAttendance.error;
+      if (resQuestions.error) throw resQuestions.error;
+
       if (resStudents.data) setStudents(resStudents.data);
       if (resTeachers.data) setTeachers(resTeachers.data);
       if (resAssessments.data) setAssessments(resAssessments.data);
@@ -355,6 +361,7 @@ export default function App() {
       if (resQuestions.data) setQuestions(resQuestions.data);
     } catch (e) {
       console.error('Failed to load data:', e);
+      throw e;
     } finally {
       setLoadingData(false);
     }
@@ -1809,7 +1816,23 @@ export default function App() {
                   try {
                     const results = JSON.parse(selectedAssessment.results_json || '[]');
                     return results.map((res, index) => {
-                      const isAnsCorrect = res.isCorrect !== undefined ? res.isCorrect : res.correct;
+                      let isAnsCorrect = false;
+                      if (res.isCorrect !== undefined) {
+                        isAnsCorrect = res.isCorrect === true || res.isCorrect === 'true';
+                      } else if (res.is_correct !== undefined) {
+                        isAnsCorrect = res.is_correct === true || res.is_correct === 'true';
+                      } else if (res.correct !== undefined) {
+                        if (typeof res.correct === 'boolean') isAnsCorrect = res.correct;
+                        else if (res.correct === 'true') isAnsCorrect = true;
+                        else if (res.correct === 'false') isAnsCorrect = false;
+                        else isAnsCorrect = res.selectedAnswer !== undefined && String(res.selectedAnswer).trim().toLowerCase() === String(res.correct).trim().toLowerCase();
+                      } else {
+                        const sel = res.selectedAnswer || res.selected_answer;
+                        const cor = res.correctAnswer || res.correct_answer;
+                        if (sel !== undefined && cor !== undefined) {
+                          isAnsCorrect = String(sel).trim().toLowerCase() === String(cor).trim().toLowerCase();
+                        }
+                      }
                       return (
                         <div
                           key={index}

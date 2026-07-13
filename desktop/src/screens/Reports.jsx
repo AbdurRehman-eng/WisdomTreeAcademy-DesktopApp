@@ -108,7 +108,23 @@ export const Reports = () => {
           <div class="section-title">Question-by-Question Breakdown</div>
           <div class="answer-grid">
             ${results.map((r, i) => {
-              const isCorrect = r.isCorrect !== undefined ? r.isCorrect : r.correct;
+              let isCorrect = false;
+              if (r.isCorrect !== undefined) {
+                isCorrect = r.isCorrect === true || r.isCorrect === 'true';
+              } else if (r.is_correct !== undefined) {
+                isCorrect = r.is_correct === true || r.is_correct === 'true';
+              } else if (r.correct !== undefined) {
+                if (typeof r.correct === 'boolean') isCorrect = r.correct;
+                else if (r.correct === 'true') isCorrect = true;
+                else if (r.correct === 'false') isCorrect = false;
+                else isCorrect = r.selectedAnswer !== undefined && String(r.selectedAnswer).trim().toLowerCase() === String(r.correct).trim().toLowerCase();
+              } else {
+                const sel = r.selectedAnswer || r.selected_answer;
+                const cor = r.correctAnswer || r.correct_answer;
+                if (sel !== undefined && cor !== undefined) {
+                  isCorrect = String(sel).trim().toLowerCase() === String(cor).trim().toLowerCase();
+                }
+              }
               return `
                 <div class="answer-item ${isCorrect ? 'correct' : 'wrong'}">
                   <div class="answer-q">Q${i + 1}</div>
