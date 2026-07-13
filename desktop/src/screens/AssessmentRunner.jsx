@@ -112,7 +112,9 @@ export const AssessmentRunner = () => {
       questionText: activeQuestion.text,
       selectedAnswer: selectedAnswer,
       correctAnswer: activeQuestion.correct,
-      isCorrect: isCorrect
+      isCorrect: isCorrect,
+      subject: activeQuestion.subject,
+      class: activeQuestion.class
     };
     
     const updatedResultsLog = [...resultsLog, newResponse];
