@@ -227,41 +227,58 @@ export const AssessmentResults = () => {
               </h3>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '350px', overflowY: 'auto', paddingRight: '4px' }}>
-                {detailsResponses.map((resp, idx) => (
-                  <div key={idx} style={{ 
-                    padding: '12px 16px', 
-                    borderRadius: '6px', 
-                    background: 'var(--bg-app)', 
-                    borderLeft: `4px solid ${resp.isCorrect ? 'var(--color-success, #10b981)' : 'var(--color-error, #ef4444)'}`,
-                    boxShadow: 'var(--shadow-sm)'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'flex-start', gap: '10px' }}>
-                      <div style={{ flexGrow: 1 }}>
-                        <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
-                          Question {idx + 1} • {resp.subject || 'Subject Details'}
-                        </span>
-                        <p style={{ margin: 0, fontSize: '13px', fontWeight: '500', lineHeight: '1.4' }}>{resp.questionText}</p>
+                {detailsResponses.map((resp, idx) => {
+                  const isCorrect = (() => {
+                    if (resp.isCorrect !== undefined) return resp.isCorrect === true || resp.isCorrect === 'true';
+                    if (resp.is_correct !== undefined) return resp.is_correct === true || resp.is_correct === 'true';
+                    if (resp.correct !== undefined) {
+                      if (typeof resp.correct === 'boolean') return resp.correct;
+                      if (resp.correct === 'true') return true;
+                      if (resp.correct === 'false') return false;
+                    }
+                    const sel = resp.selectedAnswer || resp.selected_answer;
+                    const cor = resp.correctAnswer || resp.correct_answer;
+                    if (sel !== undefined && cor !== undefined) {
+                      return String(sel).trim().toLowerCase() === String(cor).trim().toLowerCase();
+                    }
+                    return false;
+                  })();
+                  return (
+                    <div key={idx} style={{ 
+                      padding: '12px 16px', 
+                      borderRadius: '6px', 
+                      background: 'var(--bg-app)', 
+                      borderLeft: `4px solid ${isCorrect ? 'var(--color-success, #10b981)' : 'var(--color-error, #ef4444)'}`,
+                      boxShadow: 'var(--shadow-sm)'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'flex-start', gap: '10px' }}>
+                        <div style={{ flexGrow: 1 }}>
+                          <span style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>
+                            Question {idx + 1} • {resp.subject || 'Subject Details'}
+                          </span>
+                          <p style={{ margin: 0, fontSize: '13px', fontWeight: '500', lineHeight: '1.4' }}>{resp.questionText}</p>
+                          
+                          <div style={{ display: 'flex', gap: '20px', marginTop: '8px', fontSize: '12px' }}>
+                            <span>
+                              Selected: <strong style={{ color: isCorrect ? 'var(--color-success)' : 'var(--color-error)' }}>{resp.selectedAnswer || 'None'}</strong>
+                            </span>
+                            <span>
+                              Correct: <strong style={{ color: 'var(--color-success)' }}>{resp.correctAnswer}</strong>
+                            </span>
+                          </div>
+                        </div>
                         
-                        <div style={{ display: 'flex', gap: '20px', marginTop: '8px', fontSize: '12px' }}>
-                          <span>
-                            Selected: <strong style={{ color: resp.isCorrect ? 'var(--color-success)' : 'var(--color-error)' }}>{resp.selectedAnswer || 'None'}</strong>
-                          </span>
-                          <span>
-                            Correct: <strong style={{ color: 'var(--color-success)' }}>{resp.correctAnswer}</strong>
-                          </span>
+                        <div style={{ flexShrink: 0, marginTop: '2px' }}>
+                          {isCorrect ? (
+                            <CheckCircle2 size={18} color="var(--color-success)" style={{ display: 'block' }} />
+                          ) : (
+                            <XCircle size={18} color="var(--color-error)" style={{ display: 'block' }} />
+                          )}
                         </div>
                       </div>
-                      
-                      <div style={{ flexShrink: 0, marginTop: '2px' }}>
-                        {resp.isCorrect ? (
-                          <CheckCircle2 size={18} color="var(--color-success)" style={{ display: 'block' }} />
-                        ) : (
-                          <XCircle size={18} color="var(--color-error)" style={{ display: 'block' }} />
-                        )}
-                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
