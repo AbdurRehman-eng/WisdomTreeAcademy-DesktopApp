@@ -516,7 +516,6 @@ export const QuestionBank = () => {
               )}
               </div>
             </div>
-          </div>
 
           {/* Waveform recorder simulation component */}
           <div className="qb-voice-recorder-mock">
