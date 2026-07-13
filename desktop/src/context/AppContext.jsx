@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 
 const AppContext = createContext();
 
@@ -8,9 +8,16 @@ export const AppProvider = ({ children }) => {
   const [syncStatus, setSyncStatus] = useState('synced'); // 'synced', 'offline', 'syncing'
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [toasts, setToasts] = useState([]);
+  const [syncConflicts, setSyncConflicts] = useState([]);
   const [licenseKey, setLicenseKey] = useState('');
   const [licenseActive, setLicenseActive] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState(null);
+  const [isPhysicalOffline, setIsPhysicalOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+
+  const syncStatusRef = useRef(syncStatus);
+  useEffect(() => {
+    syncStatusRef.current = syncStatus;
+  }, [syncStatus]);
 
   // Load user session from local storage on load
   useEffect(() => {
@@ -88,27 +95,43 @@ export const AppProvider = ({ children }) => {
   };
 
   const showToast = (message, type = 'info') => {
-    const id = Date.now();
+    const id = `${Date.now()}-${Math.random()}`;
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 4000);
   };
 
-  const triggerSync = async () => {
-    if (syncStatus === 'offline') {
+  const removeToast = (id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  const triggerSync = async (options = {}) => {
+    if (isPhysicalOffline || syncStatus === 'offline') {
       showToast('Cannot sync in offline mode. Please switch to online first.', 'warning');
       return;
     }
     if (syncStatus === 'syncing') return;
 
+    // Sanitize options to avoid passing React SyntheticEvent objects through the IPC bridge
+    let cleanOptions = {};
+    if (options && typeof options === 'object' && !options.nativeEvent) {
+      if (options.force !== undefined) cleanOptions.force = options.force;
+      if (options.overwriteCloud !== undefined) cleanOptions.overwriteCloud = options.overwriteCloud;
+      if (options.keepCloud !== undefined) cleanOptions.keepCloud = options.keepCloud;
+    }
+
     setSyncStatus('syncing');
     showToast('Database synchronization started...', 'info');
 
     if (window.api) {
-      const res = await window.api.triggerSync();
+      const res = await window.api.triggerSync(cleanOptions);
       if (res.success) {
         showToast('Sync completed! Offline database is fully up to date.', 'success');
+        setSyncConflicts([]);
+      } else if (res.hasConflicts) {
+        showToast('Sync paused. Conflicts detected between local and cloud databases.', 'warning');
+        setSyncConflicts(res.conflicts);
       } else {
         showToast(res.error || 'Sync failed.', 'error');
       }
@@ -117,6 +140,10 @@ export const AppProvider = ({ children }) => {
   };
 
   const toggleOnlineState = async () => {
+    if (isPhysicalOffline) {
+      showToast('Cannot go online. No internet connection detected.', 'warning');
+      return;
+    }
     if (window.api) {
       const res = await window.api.toggleOnline();
       if (res.success) {
@@ -126,7 +153,7 @@ export const AppProvider = ({ children }) => {
             ? 'System is now Offline. Working locally.' 
             : 'System is now Online. Cloud sync is active.',
           res.status === 'offline' ? 'warning' : 'info'
-        );
+         );
       }
     }
   };
@@ -148,6 +175,40 @@ export const AppProvider = ({ children }) => {
     return false;
   };
 
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsPhysicalOffline(false);
+      showToast('Internet connection restored. Synchronizing data...', 'success');
+      if (syncStatusRef.current !== 'offline') {
+        triggerSync();
+      }
+    };
+
+    const handleOffline = () => {
+      setIsPhysicalOffline(true);
+      showToast('Internet connection lost. Working in offline mode.', 'warning');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Auto-sync on mount if online
+    let timer;
+    if (navigator.onLine && syncStatusRef.current !== 'offline') {
+      timer = setTimeout(() => {
+        triggerSync();
+      }, 1000);
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const effectiveSyncStatus = isPhysicalOffline ? 'offline' : syncStatus;
+
   return (
     <AppContext.Provider value={{
       user,
@@ -155,7 +216,7 @@ export const AppProvider = ({ children }) => {
       setScreen,
       login,
       logout,
-      syncStatus,
+      syncStatus: effectiveSyncStatus,
       setSyncStatus,
       pendingSyncCount,
       refreshSyncInfo,
@@ -163,6 +224,9 @@ export const AppProvider = ({ children }) => {
       toggleOnlineState,
       toasts,
       showToast,
+      removeToast,
+      syncConflicts,
+      setSyncConflicts,
       licenseKey,
       licenseActive,
       validateLicense,

@@ -6,6 +6,7 @@ import { Database, RefreshCw, Radio, HardDrive, KeyRound, Cloud, Save } from 'lu
 
 export const SyncSettings = () => {
   const {
+    user,
     syncStatus,
     pendingSyncCount,
     triggerSync,
@@ -13,7 +14,8 @@ export const SyncSettings = () => {
     showToast,
     licenseKey,
     licenseActive,
-    validateLicense
+    validateLicense,
+    refreshSyncInfo
   } = useApp();
 
   const [newKey, setNewKey] = useState('');
@@ -22,6 +24,102 @@ export const SyncSettings = () => {
   const [cloudUrl,    setCloudUrl]    = useState('');
   const [cloudApiKey, setCloudApiKey] = useState('');
   const [savingCloud, setSavingCloud] = useState(false);
+
+  // Change Password state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      showToast('Please fill out all password fields.', 'error');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showToast('New passwords do not match.', 'error');
+      return;
+    }
+    if (newPassword.length < 6) {
+      showToast('New password must be at least 6 characters long.', 'error');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      if (window.api?.changePassword && user) {
+        const res = await window.api.changePassword(user.username, currentPassword, newPassword);
+        if (res.success) {
+          showToast('Password updated successfully! Local database and pending sync queue updated.', 'success');
+          setCurrentPassword('');
+          setNewPassword('');
+          setConfirmPassword('');
+        } else {
+          showToast(res.error || 'Failed to change password.', 'error');
+        }
+      } else {
+        showToast('Password change simulated (web preview mode).', 'info');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const handleBackupDatabase = async () => {
+    try {
+      if (window.api?.backupDatabase) {
+        const res = await window.api.backupDatabase();
+        if (res.success) {
+          showToast('Database backup saved successfully.', 'success');
+        } else if (res.error !== 'Cancelled') {
+          showToast(res.error || 'Failed to backup database.', 'error');
+        }
+      } else {
+        showToast('Database backup simulated (web preview mode).', 'info');
+      }
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+  };
+
+  const handleExportQuestions = async () => {
+    try {
+      if (window.api?.exportQuestions) {
+        const res = await window.api.exportQuestions();
+        if (res.success) {
+          showToast('Question Bank exported successfully.', 'success');
+        } else if (res.error !== 'Cancelled') {
+          showToast(res.error || 'Failed to export questions.', 'error');
+        }
+      } else {
+        showToast('Question Bank export simulated (web preview mode).', 'info');
+      }
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+  };
+
+  const handleExportResults = async () => {
+    try {
+      if (window.api?.exportResults) {
+        const res = await window.api.exportResults();
+        if (res.success) {
+          showToast('Student Results exported successfully.', 'success');
+        } else if (res.error !== 'Cancelled') {
+          showToast(res.error || 'Failed to export results.', 'error');
+        }
+      } else {
+        showToast('Student Results export simulated (web preview mode).', 'info');
+      }
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+  };
 
   // Load cloud config on mount
   useEffect(() => {
@@ -64,6 +162,7 @@ export const SyncSettings = () => {
         const res = await window.api.setSyncConfig(cloudUrl.trim(), cloudApiKey.trim());
         if (res.success) {
           showToast('Cloud sync configuration saved successfully.', 'success');
+          refreshSyncInfo();
         } else {
           showToast(res.error || 'Failed to save configuration.', 'error');
         }
@@ -123,7 +222,7 @@ export const SyncSettings = () => {
           </div>
 
           <div className="flex gap-sm" style={{ marginTop: 'auto' }}>
-            <Button variant="secondary" onClick={() => showToast('Database backup saved locally.', 'success')} style={{ flex: 1 }}>
+            <Button variant="secondary" onClick={handleBackupDatabase} style={{ flex: 1 }}>
               Backup DB
             </Button>
             <Button variant="secondary" onClick={handleResetData} style={{ flex: 1 }}>
@@ -274,6 +373,79 @@ export const SyncSettings = () => {
                 </Button>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Change Password Card — full width */}
+        <div className="card flex flex-col gap-md" style={{ gridColumn: 'span 2' }}>
+          <div className="flex items-center gap-sm color-accent" style={{ color: 'var(--color-accent)' }}>
+            <KeyRound size={20} />
+            <h3 className="card-title" style={{ marginBottom: 0 }}>Change Account Password</h3>
+          </div>
+
+          <form onSubmit={handleChangePassword} className="flex gap-md" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', alignItems: 'flex-end' }}>
+            <div className="flex flex-col gap-xs">
+              <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Current Password</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                style={inputStyle}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-xs">
+              <label style={{ fontSize: '12px', fontWeight: 'bold' }}>New Password</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                style={inputStyle}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-xs">
+              <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Confirm New Password</label>
+              <div className="flex gap-xs" style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  style={{ ...inputStyle, flex: 1 }}
+                  required
+                />
+                <Button variant="primary" type="submit" disabled={changingPassword} style={{ width: 'auto' }}>
+                  {changingPassword ? 'Updating...' : 'Update'}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        {/* Export & Backup Utilities Card — full width */}
+        <div className="card flex flex-col gap-md" style={{ gridColumn: 'span 2' }}>
+          <div className="flex items-center gap-sm color-primary" style={{ color: 'var(--color-primary)' }}>
+            <Database size={20} />
+            <h3 className="card-title" style={{ marginBottom: 0 }}>Data Export &amp; Backup Utilities</h3>
+          </div>
+
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            Export your database records or create a full SQLite backup copy on your local system for record keeping.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+            <Button variant="secondary" onClick={handleBackupDatabase}>
+              Backup Local Database (.db)
+            </Button>
+            <Button variant="secondary" onClick={handleExportQuestions}>
+              Export Question Bank (.csv)
+            </Button>
+            <Button variant="secondary" onClick={handleExportResults}>
+              Export Student Results (.csv)
+            </Button>
           </div>
         </div>
       </div>

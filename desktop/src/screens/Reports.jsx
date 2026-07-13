@@ -5,8 +5,6 @@ import Badge from '../components/common/Badge';
 import { Printer, TrendingUp, Info, FileText } from 'lucide-react';
 import './Reports.css';
 
-const GRADES = ['Nursery', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5'];
-
 function getPerformanceBand(percent) {
   if (percent >= 90) return { label: 'Exceeded Expectations', css: 'exceeded', icon: '🏆' };
   if (percent >= 60) return { label: 'Met Expectations',      css: 'met',      icon: '⭐' };
@@ -18,19 +16,22 @@ export const Reports = () => {
   const printAreaRef = useRef(null);
 
   const [assessments, setAssessments]   = useState([]);
-  const [gradeAverages, setGradeAverages] = useState(
-    GRADES.reduce((acc, g) => ({ ...acc, [g]: { avg: 0, count: 0 } }), {})
-  );
+  const [grades, setGrades] = useState([]);
+  const [gradeAverages, setGradeAverages] = useState({});
   const [printTarget, setPrintTarget] = useState(null); // single assessment | 'all'
 
   useEffect(() => {
     const loadReportsData = async () => {
       if (window.api) {
+        const classesList = await window.api.getClasses();
+        const gradesNames = classesList.map(c => c.name);
+        setGrades(gradesNames);
+
         const list = await window.api.getAssessments();
         setAssessments(list);
 
         // Calculate grade averages for all grades
-        const sums = GRADES.reduce((acc, g) => ({ ...acc, [g]: { sum: 0, count: 0 } }), {});
+        const sums = gradesNames.reduce((acc, g) => ({ ...acc, [g]: { sum: 0, count: 0 } }), {});
         list.forEach(a => {
           const cls = a.student_class;
           if (sums[cls]) {
@@ -39,7 +40,7 @@ export const Reports = () => {
           }
         });
         setGradeAverages(
-          GRADES.reduce((acc, g) => ({
+          gradesNames.reduce((acc, g) => ({
             ...acc,
             [g]: {
               avg:   sums[g].count > 0 ? Math.round(sums[g].sum / sums[g].count) : 0,
@@ -106,12 +107,15 @@ export const Reports = () => {
           ${results.length > 0 ? `
           <div class="section-title">Question-by-Question Breakdown</div>
           <div class="answer-grid">
-            ${results.map((r, i) => `
-              <div class="answer-item ${r.correct ? 'correct' : 'wrong'}">
-                <div class="answer-q">Q${i + 1}</div>
-                <div class="answer-mark">${r.correct ? '✅' : '❌'}</div>
-              </div>
-            `).join('')}
+            ${results.map((r, i) => {
+              const isCorrect = r.isCorrect !== undefined ? r.isCorrect : r.correct;
+              return `
+                <div class="answer-item ${isCorrect ? 'correct' : 'wrong'}">
+                  <div class="answer-q">Q${i + 1}</div>
+                  <div class="answer-mark">${isCorrect ? '✅' : '❌'}</div>
+                </div>
+              `;
+            }).join('')}
           </div>` : ''}
           <div class="signatures-row">
             <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Teacher / Assessor</div></div>
@@ -222,9 +226,9 @@ export const Reports = () => {
         </Button>
       </div>
 
-      {/* Grade averages grid — all 6 grades */}
+      {/* Grade averages grid */}
       <div className="grid grid-cols-3" style={{ gap: '16px' }}>
-        {GRADES.map(grade => {
+        {grades.map(grade => {
           const { avg, count } = gradeAverages[grade] || { avg: 0, count: 0 };
           const band = getPerformanceBand(avg);
           return (

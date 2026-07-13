@@ -8,6 +8,14 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    setupFiles: './src/test/setup.js'
+    setupFiles: './src/test/setup.js',
+    server: {
+      deps: {
+        inline: [
+          '@csstools/css-calc',
+          '@asamuzakjp/css-color'
+        ]
+      }
+    }
   }
 })
