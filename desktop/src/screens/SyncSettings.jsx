@@ -20,11 +20,6 @@ export const SyncSettings = () => {
 
   const [newKey, setNewKey] = useState('');
 
-  // Cloud config state
-  const [cloudUrl,    setCloudUrl]    = useState('');
-  const [cloudApiKey, setCloudApiKey] = useState('');
-  const [savingCloud, setSavingCloud] = useState(false);
-
   // Change Password state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -121,19 +116,12 @@ export const SyncSettings = () => {
     }
   };
 
-  // Load cloud config on mount
-  useEffect(() => {
-    const loadConfig = async () => {
-      if (window.api?.getSyncConfig) {
-        const cfg = await window.api.getSyncConfig();
-        setCloudUrl(cfg.projectUrl || '');
-        setCloudApiKey(cfg.apiKey || '');
-      }
-    };
-    loadConfig();
-  }, []);
-
   const handleResetData = () => {
+    const confirmed = window.confirm(
+      "WARNING: This will reset the database cache, clear all offline records, and reload the application. This action CANNOT be undone. Are you absolutely sure you want to proceed?"
+    );
+    if (!confirmed) return;
+
     showToast('Resetting database defaults... Cache cleared.', 'success');
     window.location.reload();
   };
@@ -147,32 +135,6 @@ export const SyncSettings = () => {
     if (success) setNewKey('');
   };
 
-  const handleSaveCloudConfig = async () => {
-    if (!cloudUrl.trim()) {
-      showToast('Please enter your Supabase Project URL.', 'error');
-      return;
-    }
-    if (!cloudApiKey.trim()) {
-      showToast('Please enter your Supabase API key.', 'error');
-      return;
-    }
-    setSavingCloud(true);
-    try {
-      if (window.api?.setSyncConfig) {
-        const res = await window.api.setSyncConfig(cloudUrl.trim(), cloudApiKey.trim());
-        if (res.success) {
-          showToast('Cloud sync configuration saved successfully.', 'success');
-          refreshSyncInfo();
-        } else {
-          showToast(res.error || 'Failed to save configuration.', 'error');
-        }
-      } else {
-        showToast('Cloud config saved (web preview mode — not persisted).', 'info');
-      }
-    } finally {
-      setSavingCloud(false);
-    }
-  };
 
   const inputStyle = {
     width: '100%',
@@ -274,57 +236,6 @@ export const SyncSettings = () => {
           </div>
         </div>
 
-        {/* Cloud Configuration Card — full width */}
-        <div className="card flex flex-col gap-md" style={{ gridColumn: 'span 2' }}>
-          <div className="flex items-center gap-sm" style={{ color: 'var(--color-success)' }}>
-            <Cloud size={20} />
-            <h3 className="card-title" style={{ marginBottom: 0 }}>Cloud Sync Configuration (Supabase)</h3>
-          </div>
-
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            Enter your <strong>Supabase project URL</strong> and <strong>anon API key</strong> to enable real cloud synchronization.
-            All pending local records will be pushed to your Supabase database when you trigger a sync.
-            See <code>docs/SYNC_GUIDE.md</code> for setup instructions.
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div className="flex flex-col gap-xs">
-              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                Supabase Project URL
-              </label>
-              <input
-                type="url"
-                placeholder="https://xxxxxxxxxxx.supabase.co"
-                value={cloudUrl}
-                onChange={e => setCloudUrl(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-            <div className="flex flex-col gap-xs">
-              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                Supabase Anon API Key
-              </label>
-              <input
-                type="password"
-                placeholder="eyJ... (anon key from Supabase project settings)"
-                value={cloudApiKey}
-                onChange={e => setCloudApiKey(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              variant="primary"
-              icon={Save}
-              onClick={handleSaveCloudConfig}
-              disabled={savingCloud}
-            >
-              {savingCloud ? 'Saving...' : 'Save Cloud Configuration'}
-            </Button>
-          </div>
-        </div>
 
         {/* Licensing Card — full width */}
         <div className="card flex flex-col gap-md" style={{ gridColumn: 'span 2' }}>
