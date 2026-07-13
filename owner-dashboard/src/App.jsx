@@ -16,7 +16,11 @@ import {
   Plus,
   Trash2,
   Edit,
-  Key
+  Key,
+  Settings,
+  FileText,
+  Lock,
+  Database
 } from 'lucide-react';
 
 async function hashPasswordBrowser(password) {
@@ -55,6 +59,33 @@ async function hashPasswordBrowser(password) {
 }
 
 export default function App() {
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return sessionStorage.getItem('owner-authenticated') === 'true';
+  });
+  const [loginUsername, setLoginUsername] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  // Modals for Student & Staff Creation State
+  const [showAddStudentModal, setShowAddStudentModal] = useState(false);
+  const [studentName, setStudentName] = useState('');
+  const [studentRollNumber, setStudentRollNumber] = useState('');
+  const [studentClass, setStudentClass] = useState('Nursery');
+  const [isSavingStudent, setIsSavingStudent] = useState(false);
+
+  const [showAddStaffModal, setShowAddStaffModal] = useState(false);
+  const [staffName, setStaffName] = useState('');
+  const [staffUsername, setStaffUsername] = useState('');
+  const [staffEmail, setStaffEmail] = useState('');
+  const [staffRole, setStaffRole] = useState('teacher');
+  const [staffPassword, setStaffPassword] = useState('');
+  const [isSavingStaff, setIsSavingStaff] = useState(false);
+
+  // Activity Logs search / filter state
+  const [logSearch, setLogSearch] = useState('');
+  const [logTypeFilter, setLogTypeFilter] = useState('All');
+
   // Staff Password Reset Modal State
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState(null);
@@ -93,7 +124,7 @@ export default function App() {
         .update({
           password_hash: passwordHash,
           sync_status: 'synced',
-          updated_at: new Date().toISOString()
+          updated_at: Date.now()
         })
         .eq('id', selectedStaff.id);
 
@@ -206,6 +237,23 @@ export default function App() {
     }
   }, [darkTheme]);
 
+  // Temp inputs for database settings page to avoid mutating active connection state prematurely
+  const [tempSupabaseUrl, setTempSupabaseUrl] = useState(supabaseUrl);
+  const [tempSupabaseKey, setTempSupabaseKey] = useState(supabaseKey);
+
+  // Sync temp inputs when the main credentials change
+  useEffect(() => {
+    setTempSupabaseUrl(supabaseUrl);
+    setTempSupabaseKey(supabaseKey);
+  }, [supabaseUrl, supabaseKey]);
+
+  // Redirect to Settings tab if not connected
+  useEffect(() => {
+    if (!isConnected && activeTab !== 'settings' && activeTab !== 'licensing') {
+      setActiveTab('settings');
+    }
+  }, [isConnected, activeTab]);
+
   // Attempt connection on mount if keys are saved
   useEffect(() => {
     if (supabaseUrl && supabaseKey) {
@@ -214,8 +262,11 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleConnect = async (isAuto = false) => {
-    if (!supabaseUrl || !supabaseKey) {
+  const handleConnect = async (isAuto = false, customUrl = null, customKey = null) => {
+    const targetUrl = customUrl || supabaseUrl;
+    const targetKey = customKey || supabaseKey;
+
+    if (!targetUrl || !targetKey) {
       if (!isAuto) setConnectionError('Both Supabase URL and Anon Key are required.');
       return;
     }
@@ -223,10 +274,9 @@ export default function App() {
     setIsConnecting(true);
     setConnectionError('');
     try {
-      const client = createClient(supabaseUrl, supabaseKey);
+      const client = createClient(targetUrl, targetKey);
       
       // Test the connection by doing a simple query on the students table.
-      // If RLS is enabled and select is restricted, we'll still get a response (even empty array) or metadata check.
       const { error } = await client.from('students').select('*').limit(1);
 
       if (error) {
@@ -234,8 +284,10 @@ export default function App() {
       }
 
       // Connection success
-      localStorage.setItem('supabase-url', supabaseUrl);
-      localStorage.setItem('supabase-anon-key', supabaseKey);
+      localStorage.setItem('supabase-url', targetUrl);
+      localStorage.setItem('supabase-anon-key', targetKey);
+      setSupabaseUrl(targetUrl);
+      setSupabaseKey(targetKey);
       setIsConnected(true);
       
       // Load all data
@@ -248,13 +300,39 @@ export default function App() {
     }
   };
 
-  const handleDisconnect = () => {
-    setIsConnected(false);
-    setStudents([]);
-    setTeachers([]);
-    setAssessments([]);
-    setAttendance([]);
-    setQuestions([]);
+  const handleDisconnect = (skipWarning = false) => {
+    if (skipWarning || window.confirm("Warning: You are about to disconnect from the database. All loaded data will be cleared until you reconnect. Do you want to proceed?")) {
+      setIsConnected(false);
+      localStorage.removeItem('supabase-url');
+      localStorage.removeItem('supabase-anon-key');
+      setStudents([]);
+      setTeachers([]);
+      setAssessments([]);
+      setAttendance([]);
+      setQuestions([]);
+    }
+  };
+
+  const handleSaveConnectionKeys = async (e) => {
+    e.preventDefault();
+    if (!tempSupabaseUrl.trim() || !tempSupabaseKey.trim()) {
+      alert('Both Supabase URL and Anon Key are required.');
+      return;
+    }
+
+    if (isConnected) {
+      const ok = window.confirm("Warning: Changing the Supabase credentials will disconnect the current session and try connecting to the new URL. Do you want to proceed?");
+      if (!ok) return;
+    }
+
+    await handleConnect(false, tempSupabaseUrl.trim(), tempSupabaseKey.trim());
+  };
+
+  const handleLogout = () => {
+    if (window.confirm("Are you sure you want to log out of this admin session?")) {
+      setIsAuthenticated(false);
+      sessionStorage.removeItem('owner-authenticated');
+    }
   };
 
   const loadDashboardData = async (clientInstance) => {
@@ -318,6 +396,91 @@ export default function App() {
     setQAudioText(q.audio_text || '');
     setQImagePath(q.image_path || '');
     setShowQuestionModal(true);
+  };
+
+  const handleSaveStudent = async (e) => {
+    e.preventDefault();
+    if (!studentName.trim() || !studentRollNumber.trim()) {
+      alert('Please fill in student name and roll number.');
+      return;
+    }
+    const isDuplicate = students.some(s => s.roll_number?.toLowerCase() === studentRollNumber.trim().toLowerCase() && s.status === 'active');
+    if (isDuplicate) {
+      alert(`A student with Roll Number "${studentRollNumber.trim()}" already exists.`);
+      return;
+    }
+
+    setIsSavingStudent(true);
+    const client = createClient(supabaseUrl, supabaseKey);
+    const newStudent = {
+      id: window.crypto.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now(),
+      name: studentName.trim(),
+      roll_number: studentRollNumber.trim(),
+      class: studentClass,
+      status: 'active',
+      updated_at: Date.now()
+    };
+
+    try {
+      const { error } = await client
+        .from('students')
+        .insert(newStudent);
+      if (error) throw error;
+
+      alert(`Student ${studentName.trim()} registered successfully.`);
+      setShowAddStudentModal(false);
+      loadDashboardData(client);
+    } catch (err) {
+      alert('Error registering student: ' + err.message);
+    } finally {
+      setIsSavingStudent(false);
+    }
+  };
+
+  const handleSaveStaff = async (e) => {
+    e.preventDefault();
+    if (!staffName.trim() || !staffUsername.trim() || !staffPassword.trim()) {
+      alert('Please fill in name, username, and password.');
+      return;
+    }
+    if (staffPassword.length < 6) {
+      alert('Password must be at least 6 characters long.');
+      return;
+    }
+    const isDuplicate = teachers.some(t => t.username?.toLowerCase() === staffUsername.trim().toLowerCase() && t.status === 'active');
+    if (isDuplicate) {
+      alert(`Staff username "${staffUsername.trim()}" is already registered.`);
+      return;
+    }
+
+    setIsSavingStaff(true);
+    try {
+      const passwordHash = await hashPasswordBrowser(staffPassword);
+      const client = createClient(supabaseUrl, supabaseKey);
+      const newStaff = {
+        id: window.crypto.randomUUID ? window.crypto.randomUUID() : Math.random().toString(36).substring(2) + Date.now(),
+        username: staffUsername.trim().toLowerCase(),
+        password_hash: passwordHash,
+        role: staffRole,
+        name: staffName.trim(),
+        email: staffEmail.trim() || null,
+        status: 'active',
+        updated_at: Date.now()
+      };
+
+      const { error } = await client
+        .from('teachers_admins')
+        .insert(newStaff);
+      if (error) throw error;
+
+      alert(`Staff account for ${staffName.trim()} registered successfully.`);
+      setShowAddStaffModal(false);
+      loadDashboardData(client);
+    } catch (err) {
+      alert('Error registering staff: ' + err.message);
+    } finally {
+      setIsSavingStaff(false);
+    }
   };
 
   const handleSaveQuestion = async (e) => {
@@ -401,10 +564,12 @@ export default function App() {
   })();
 
   const attendanceRate = (() => {
-    if (attendance.length === 0) return 'N/A';
-    const present = attendance.filter(a => a.status === 'present').length;
-    const total = attendance.length;
-    return `${Math.round((present / total) * 100)}%`;
+    const studentAttendance = attendance.filter(a => a.type === 'student');
+    if (studentAttendance.length === 0) return 'N/A';
+    const present = studentAttendance.filter(a => a.status === 'present').length;
+    const late = studentAttendance.filter(a => a.status === 'late').length;
+    const total = studentAttendance.length;
+    return `${Math.round(((present + late * 0.8) / total) * 100)}%`;
   })();
 
   // Filter students based on search query and classroom filter
@@ -415,43 +580,133 @@ export default function App() {
     return matchesSearch && matchesClass;
   });
 
-  // Render Supabase credentials screen if not connected
-  if (!isConnected) {
+  const activityLogs = (() => {
+    const logs = [];
+    
+    // 1. Students
+    students.forEach(s => {
+      logs.push({
+        id: `student_${s.id}_${s.updated_at}`,
+        timestamp: s.updated_at,
+        actor: 'Administrator',
+        category: 'Student Registry',
+        detail: `Registered student "${s.name}" (Roll: ${s.roll_number}) in ${s.class}`,
+        type: 'student'
+      });
+    });
+
+    // 2. Staff (teachers_admins)
+    teachers.forEach(t => {
+      logs.push({
+        id: `staff_${t.id}_${t.updated_at}`,
+        timestamp: t.updated_at,
+        actor: 'Super Administrator',
+        category: 'Staff Account',
+        detail: `Registered staff account "${t.name}" (${t.username}) as ${t.role}`,
+        type: 'staff'
+      });
+    });
+
+    // 3. Question Bank
+    questions.forEach(q => {
+      logs.push({
+        id: `question_${q.id}_${q.updated_at}`,
+        timestamp: q.updated_at,
+        actor: 'Administrator',
+        category: 'Question Bank',
+        detail: `Created/Updated MCQ question: "${q.text.substring(0, 50)}${q.text.length > 50 ? '...' : ''}" for ${q.class} ${q.subject}`,
+        type: 'question'
+      });
+    });
+
+    // 4. Assessments
+    assessments.forEach(a => {
+      const student = students.find(s => s.id === a.student_id);
+      const studentName = student ? student.name : 'Unknown Student';
+      logs.push({
+        id: `assessment_${a.id}_${a.updated_at}`,
+        timestamp: a.updated_at,
+        actor: 'Teacher',
+        category: 'Assessments',
+        detail: `Completed Diagnostic Assessment for "${studentName}" - Score: ${a.score}/${a.total_questions} (${Math.round((a.score/a.total_questions)*100)}%)`,
+        type: 'assessment'
+      });
+    });
+
+    // 5. Attendance
+    attendance.forEach(att => {
+      const student = att.type === 'student' ? students.find(s => s.id === att.target_id) : null;
+      const teacher = att.type === 'teacher' ? teachers.find(t => t.id === att.target_id) : null;
+      const targetName = student?.name || teacher?.name || 'Unknown';
+      logs.push({
+        id: `attendance_${att.id}_${att.updated_at}`,
+        timestamp: att.updated_at,
+        actor: 'Teacher',
+        category: 'Attendance',
+        detail: `Marked ${att.type} "${targetName}" as ${att.status} for date ${att.date}`,
+        type: 'attendance'
+      });
+    });
+
+    // Sort by timestamp descending
+    return logs.sort((a, b) => b.timestamp - a.timestamp);
+  })();
+
+  const filteredLogs = activityLogs.filter(log => {
+    const matchesSearch = log.detail.toLowerCase().includes(logSearch.toLowerCase()) || 
+                          log.actor.toLowerCase().includes(logSearch.toLowerCase());
+    const matchesType = logTypeFilter === 'All' || log.type === logTypeFilter;
+    return matchesSearch && matchesType;
+  });
+
+  // Render login screen if not authenticated
+  if (!isAuthenticated) {
     return (
       <div className="conn-overlay">
-        <div className="card conn-card">
+        <div className="card conn-card" style={{ maxWidth: '400px', width: '100%' }}>
           <div className="text-center flex flex-col gap-sm items-center">
             <span style={{ fontSize: '40px' }}>🌳</span>
             <h1 style={{ fontSize: '24px', margin: '8px 0' }} className="brand-title">Wisdom Tree Academy</h1>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-              Central Franchise &amp; Owner Management Dashboard Setup
+            <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', fontWeight: 500 }}>
+              Owner Console Authorization
             </p>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            if (loginUsername === 'superadmin' && loginPassword === 'superadmin123') {
+              setIsAuthenticated(true);
+              sessionStorage.setItem('owner-authenticated', 'true');
+              setLoginError('');
+            } else {
+              setLoginError('Incorrect username or password. Access denied.');
+            }
+          }} style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginTop: '16px' }}>
             <div className="form-group">
-              <label className="form-label">Supabase Project URL</label>
+              <label className="form-label" style={{ fontWeight: 600 }}>Username</label>
               <input
-                type="url"
+                type="text"
                 className="form-input"
-                placeholder="https://xxxxxxxxxxxxx.supabase.co"
-                value={supabaseUrl}
-                onChange={e => setSupabaseUrl(e.target.value)}
+                placeholder="superadmin"
+                value={loginUsername}
+                onChange={e => setLoginUsername(e.target.value)}
+                required
               />
             </div>
 
             <div className="form-group">
-              <label className="form-label">Supabase Anon Key</label>
+              <label className="form-label" style={{ fontWeight: 600 }}>Password</label>
               <input
                 type="password"
                 className="form-input"
-                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                value={supabaseKey}
-                onChange={e => setSupabaseKey(e.target.value)}
+                placeholder="••••••••"
+                value={loginPassword}
+                onChange={e => setLoginPassword(e.target.value)}
+                required
               />
             </div>
 
-            {connectionError && (
+            {loginError && (
               <div style={{
                 backgroundColor: 'var(--color-error-bg)',
                 color: 'var(--color-error)',
@@ -460,21 +715,21 @@ export default function App() {
                 padding: '12px',
                 fontSize: '13px'
               }}>
-                <strong>Connection Failed:</strong> {connectionError}
+                {loginError}
               </div>
             )}
 
             <button
+              type="submit"
               className="btn btn-primary"
-              style={{ width: '100%', padding: '12px' }}
-              disabled={isConnecting}
-              onClick={() => handleConnect(false)}
+              style={{ width: '100%', padding: '12px', fontWeight: 600, fontSize: '14px' }}
             >
-              {isConnecting ? 'Establishing Connection...' : 'Securely Connect to Supabase'}
+              Access Owner Console
             </button>
 
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>
               <button
+                type="button"
                 onClick={() => setDarkTheme(!darkTheme)}
                 className="btn btn-secondary"
                 style={{ borderRadius: '50%', width: '40px', height: '40px', padding: 0 }}
@@ -483,11 +738,27 @@ export default function App() {
                 {darkTheme ? <Sun size={18} /> : <Moon size={18} />}
               </button>
             </div>
-          </div>
+          </form>
         </div>
       </div>
     );
   }
+
+  const isTabLocked = (tabId) => {
+    if (tabId === 'settings' || tabId === 'licensing') return false;
+    return !isConnected;
+  };
+
+  const handleSidebarRefresh = async () => {
+    if (!isConnected) return;
+    try {
+      const client = createClient(supabaseUrl, supabaseKey);
+      await loadDashboardData(client);
+      alert('Data refreshed successfully from Supabase.');
+    } catch (err) {
+      alert('Failed to refresh data: ' + err.message);
+    }
+  };
 
   return (
     <div className="app-container">
@@ -504,45 +775,100 @@ export default function App() {
         <nav style={{ flex: 1, marginTop: '24px' }}>
           <ul className="nav-links">
             <li>
-              <button className={`nav-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>
+              <button
+                className={`nav-item ${activeTab === 'overview' ? 'active' : ''} ${isTabLocked('overview') ? 'disabled' : ''}`}
+                onClick={() => !isTabLocked('overview') && setActiveTab('overview')}
+                style={{ cursor: isTabLocked('overview') ? 'not-allowed' : 'pointer', width: '100%', display: 'flex', alignItems: 'center' }}
+              >
                 <Grid size={18} />
                 <span>Overview Stats</span>
+                {isTabLocked('overview') && <Lock size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
               </button>
             </li>
             <li>
-              <button className={`nav-item ${activeTab === 'students' ? 'active' : ''}`} onClick={() => setActiveTab('students')}>
+              <button
+                className={`nav-item ${activeTab === 'students' ? 'active' : ''} ${isTabLocked('students') ? 'disabled' : ''}`}
+                onClick={() => !isTabLocked('students') && setActiveTab('students')}
+                style={{ cursor: isTabLocked('students') ? 'not-allowed' : 'pointer', width: '100%', display: 'flex', alignItems: 'center' }}
+              >
                 <Users size={18} />
                 <span>Student Roster</span>
+                {isTabLocked('students') && <Lock size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
               </button>
             </li>
             <li>
-              <button className={`nav-item ${activeTab === 'staff' ? 'active' : ''}`} onClick={() => setActiveTab('staff')}>
+              <button
+                className={`nav-item ${activeTab === 'staff' ? 'active' : ''} ${isTabLocked('staff') ? 'disabled' : ''}`}
+                onClick={() => !isTabLocked('staff') && setActiveTab('staff')}
+                style={{ cursor: isTabLocked('staff') ? 'not-allowed' : 'pointer', width: '100%', display: 'flex', alignItems: 'center' }}
+              >
                 <UserCheck size={18} />
                 <span>Staff &amp; Admins</span>
+                {isTabLocked('staff') && <Lock size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
               </button>
             </li>
             <li>
-              <button className={`nav-item ${activeTab === 'questions' ? 'active' : ''}`} onClick={() => setActiveTab('questions')}>
+              <button
+                className={`nav-item ${activeTab === 'questions' ? 'active' : ''} ${isTabLocked('questions') ? 'disabled' : ''}`}
+                onClick={() => !isTabLocked('questions') && setActiveTab('questions')}
+                style={{ cursor: isTabLocked('questions') ? 'not-allowed' : 'pointer', width: '100%', display: 'flex', alignItems: 'center' }}
+              >
                 <BookOpen size={18} />
                 <span>Question Bank</span>
+                {isTabLocked('questions') && <Lock size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
               </button>
             </li>
             <li>
-              <button className={`nav-item ${activeTab === 'assessments' ? 'active' : ''}`} onClick={() => setActiveTab('assessments')}>
+              <button
+                className={`nav-item ${activeTab === 'assessments' ? 'active' : ''} ${isTabLocked('assessments') ? 'disabled' : ''}`}
+                onClick={() => !isTabLocked('assessments') && setActiveTab('assessments')}
+                style={{ cursor: isTabLocked('assessments') ? 'not-allowed' : 'pointer', width: '100%', display: 'flex', alignItems: 'center' }}
+              >
                 <Award size={18} />
                 <span>Assessments</span>
+                {isTabLocked('assessments') && <Lock size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
               </button>
             </li>
             <li>
-              <button className={`nav-item ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => setActiveTab('attendance')}>
+              <button
+                className={`nav-item ${activeTab === 'attendance' ? 'active' : ''} ${isTabLocked('attendance') ? 'disabled' : ''}`}
+                onClick={() => !isTabLocked('attendance') && setActiveTab('attendance')}
+                style={{ cursor: isTabLocked('attendance') ? 'not-allowed' : 'pointer', width: '100%', display: 'flex', alignItems: 'center' }}
+              >
                 <Calendar size={18} />
                 <span>Attendance Logs</span>
+                {isTabLocked('attendance') && <Lock size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
               </button>
             </li>
             <li>
-              <button className={`nav-item ${activeTab === 'licensing' ? 'active' : ''}`} onClick={() => setActiveTab('licensing')}>
+              <button
+                className={`nav-item ${activeTab === 'logs' ? 'active' : ''} ${isTabLocked('logs') ? 'disabled' : ''}`}
+                onClick={() => !isTabLocked('logs') && setActiveTab('logs')}
+                style={{ cursor: isTabLocked('logs') ? 'not-allowed' : 'pointer', width: '100%', display: 'flex', alignItems: 'center' }}
+              >
+                <FileText size={18} />
+                <span>Activity Logs</span>
+                {isTabLocked('logs') && <Lock size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+              </button>
+            </li>
+            <li>
+              <button
+                className={`nav-item ${activeTab === 'licensing' ? 'active' : ''}`}
+                onClick={() => setActiveTab('licensing')}
+                style={{ width: '100%', display: 'flex', alignItems: 'center' }}
+              >
                 <Key size={18} />
                 <span>Issue License Key</span>
+              </button>
+            </li>
+            <li>
+              <button
+                className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+                onClick={() => setActiveTab('settings')}
+                style={{ width: '100%', display: 'flex', alignItems: 'center' }}
+              >
+                <Settings size={18} />
+                <span>Database Settings</span>
               </button>
             </li>
           </ul>
@@ -555,24 +881,25 @@ export default function App() {
               onClick={() => setDarkTheme(!darkTheme)}
               className="btn btn-secondary"
               style={{ borderRadius: '50%', width: '40px', height: '40px', padding: 0 }}
+              title="Toggle Theme"
             >
               {darkTheme ? <Sun size={16} /> : <Moon size={16} />}
             </button>
 
             <button
-              onClick={() => loadDashboardData()}
+              onClick={handleSidebarRefresh}
               className="btn btn-secondary"
               style={{ borderRadius: '50%', width: '40px', height: '40px', padding: 0 }}
               title="Refresh Data"
-              disabled={loadingData}
+              disabled={loadingData || !isConnected}
             >
               <RefreshCw size={16} className={loadingData ? 'spin-anim' : ''} />
             </button>
           </div>
 
-          <button className="btn btn-secondary" style={{ width: '100%' }} onClick={handleDisconnect}>
+          <button className="btn btn-secondary" style={{ width: '100%', marginTop: '8px' }} onClick={handleLogout}>
             <LogOut size={16} />
-            <span>Disconnect</span>
+            <span>Log Out Admin</span>
           </button>
         </div>
       </aside>
@@ -588,10 +915,16 @@ export default function App() {
               {activeTab === 'questions' && 'Franchise MCQ Question Bank'}
               {activeTab === 'assessments' && 'Diagnostic Assessment Transcripts'}
               {activeTab === 'attendance' && 'Student & Teacher Attendance Audit'}
+              {activeTab === 'logs' && 'Franchise Activity & Operations Audit Logs'}
               {activeTab === 'licensing' && 'Offline License Key Generator'}
+              {activeTab === 'settings' && 'Supabase Cluster Settings'}
             </h2>
             <p className="header-subtitle">
-              Connected to Supabase Cluster: <code>{new URL(supabaseUrl).hostname}</code>
+              {isConnected ? (
+                <span>Connected to Supabase Cluster: <code>{supabaseUrl ? new URL(supabaseUrl).hostname : 'N/A'}</code></span>
+              ) : (
+                <span style={{ color: 'var(--color-error)' }}>Disconnected: Database Access Restricted</span>
+              )}
             </p>
           </div>
         </header>
@@ -747,7 +1080,22 @@ export default function App() {
                   </select>
                 </div>
               </div>
-              <span className="card-footer-text">Showing {filteredStudents.length} of {totalStudents} Students</span>
+              <div className="flex gap-sm items-center">
+                <span className="card-footer-text" style={{ marginRight: '12px' }}>Showing {filteredStudents.length} of {totalStudents} Students</span>
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    setStudentName('');
+                    setStudentRollNumber('');
+                    setStudentClass('Nursery');
+                    setShowAddStudentModal(true);
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <Plus size={16} />
+                  Register Student
+                </button>
+              </div>
             </div>
 
             <div className="table-container">
@@ -789,6 +1137,25 @@ export default function App() {
         {/* STAFF TAB */}
         {activeTab === 'staff' && (
           <div className="card fade-in">
+            <div className="flex justify-between items-center m-b-md" style={{ marginBottom: '16px' }}>
+              <span className="card-footer-text">Registered Wisdom Tree franchise teachers and administrators.</span>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setStaffName('');
+                  setStaffUsername('');
+                  setStaffEmail('');
+                  setStaffRole('teacher');
+                  setStaffPassword('');
+                  setShowAddStaffModal(true);
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <Plus size={16} />
+                Register Staff Account
+              </button>
+            </div>
+
             <div className="table-container">
               <table className="data-table">
                 <thead>
@@ -1201,6 +1568,188 @@ export default function App() {
             </div>
           </div>
         )}
+        {/* DATABASE SETTINGS TAB */}
+        {activeTab === 'settings' && (
+          <div className="card fade-in" style={{ maxWidth: '650px', margin: '0 auto' }}>
+            <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Settings size={20} className="color-primary" />
+              Supabase Database Connection settings
+            </h3>
+
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
+              Configure the connection keys to your remote cloud database. All franchise branches utilize this shared database to sync assessment scores, attendance logs, and student registrations.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{
+                padding: '12px 16px',
+                borderRadius: '8px',
+                border: '1px solid var(--border-color)',
+                backgroundColor: isConnected ? 'rgba(34, 197, 94, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                color: isConnected ? 'var(--color-success)' : 'var(--color-error)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '14px',
+                fontWeight: 'bold'
+              }}>
+                <div style={{
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  backgroundColor: isConnected ? 'var(--color-success)' : 'var(--color-error)'
+                }}></div>
+                Database Connection Status: {isConnected ? 'Connected & Operational' : 'Disconnected'}
+              </div>
+
+              {!isConnected && (
+                <div style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(239, 68, 68, 0.2)',
+                  backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                  color: 'var(--text-primary)',
+                  fontSize: '13px',
+                  lineHeight: '1.5'
+                }}>
+                  <strong>⚠️ Restricted Mode Enabled:</strong> When the database is disconnected, access to all other administrative panels (Overview, Students, Staff, Questions, Assessments, and Attendance) is locked for safety.
+                </div>
+              )}
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 'bold' }}>Supabase Project URL</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="https://your-project.supabase.co"
+                  value={tempSupabaseUrl}
+                  onChange={e => setTempSupabaseUrl(e.target.value)}
+                  style={{ fontFamily: 'monospace', fontSize: '13px' }}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 'bold' }}>Supabase Anon Key / Service Key</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="eyJhbGciOiJIUzI1NiIsIn..."
+                  value={tempSupabaseKey}
+                  onChange={e => setTempSupabaseKey(e.target.value)}
+                  style={{ fontFamily: 'monospace', fontSize: '13px' }}
+                />
+              </div>
+
+              <div className="flex justify-end gap-sm" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '18px', marginTop: '10px' }}>
+                {isConnected && (
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => handleDisconnect(false)}
+                    style={{ color: 'var(--color-error)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                  >
+                    Disconnect Database
+                  </button>
+                )}
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSaveConnectionKeys}
+                  disabled={!tempSupabaseUrl.trim() || !tempSupabaseKey.trim()}
+                >
+                  Save &amp; Establish Connection
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ACTIVITY LOGS TAB */}
+        {activeTab === 'logs' && (
+          <div className="card fade-in">
+            <div className="flex justify-between items-center m-b-md" style={{ gap: '16px', flexWrap: 'wrap', marginBottom: '20px' }}>
+              <div className="flex gap-sm items-center" style={{ flex: 1 }}>
+                <div className="form-group" style={{ width: '280px', marginBottom: 0 }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Search logs by actor or description..."
+                    value={logSearch}
+                    onChange={e => setLogSearch(e.target.value)}
+                  />
+                </div>
+                <div className="form-group" style={{ width: '180px', marginBottom: 0 }}>
+                  <select
+                    className="form-input"
+                    value={logTypeFilter}
+                    onChange={e => setLogTypeFilter(e.target.value)}
+                  >
+                    <option value="All">All Operations</option>
+                    <option value="student">Student Registries</option>
+                    <option value="staff">Staff Accounts</option>
+                    <option value="question">Question Bank</option>
+                    <option value="assessment">Diagnostic Assessments</option>
+                    <option value="attendance">Attendance Logs</option>
+                  </select>
+                </div>
+              </div>
+              <span className="card-footer-text">Showing {filteredLogs.length} of {activityLogs.length} audit logs</span>
+            </div>
+
+            <div className="table-container">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '160px' }}>Timestamp</th>
+                    <th style={{ width: '130px' }}>Category</th>
+                    <th style={{ width: '150px' }}>Actor</th>
+                    <th>Activity Detail Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLogs.map(log => (
+                    <tr key={log.id}>
+                      <td style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        {new Date(log.timestamp).toLocaleString()}
+                      </td>
+                      <td>
+                        <span className={`badge ${
+                          log.type === 'student' ? 'badge-primary' :
+                          log.type === 'staff' ? 'badge-success' :
+                          log.type === 'question' ? 'badge-info' :
+                          log.type === 'assessment' ? 'badge-warning' :
+                          'badge-error'
+                        }`} style={{
+                          backgroundColor:
+                            log.type === 'question' ? 'rgba(56, 189, 248, 0.15)' :
+                            log.type === 'assessment' ? 'rgba(251, 191, 36, 0.15)' :
+                            undefined,
+                          color:
+                            log.type === 'question' ? '#38bdf8' :
+                            log.type === 'assessment' ? '#fbbf24' :
+                            undefined
+                        }}>
+                          {log.category}
+                        </span>
+                      </td>
+                      <td>
+                        <strong style={{ fontSize: '13px' }}>{log.actor}</strong>
+                      </td>
+                      <td style={{ fontSize: '13.5px', lineHeight: 1.4 }}>
+                        {log.detail}
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredLogs.length === 0 && (
+                    <tr>
+                      <td colSpan="4" className="text-center" style={{ color: 'var(--text-secondary)', padding: '24px' }}>
+                        No operations logs found matching the filters.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </main>
 
       {/* ASSESSMENT TRANSCRIPT VIEW MODAL */}
@@ -1259,15 +1808,18 @@ export default function App() {
                 {(() => {
                   try {
                     const results = JSON.parse(selectedAssessment.results_json || '[]');
-                    return results.map((res, index) => (
-                      <div
-                        key={index}
-                        className={`report-answer-item ${res.correct ? 'report-answer-correct' : 'report-answer-incorrect'}`}
-                      >
-                        <span>Q{index + 1}:</span>
-                        <span>{res.correct ? 'Correct' : 'Incorrect'}</span>
-                      </div>
-                    ));
+                    return results.map((res, index) => {
+                      const isAnsCorrect = res.isCorrect !== undefined ? res.isCorrect : res.correct;
+                      return (
+                        <div
+                          key={index}
+                          className={`report-answer-item ${isAnsCorrect ? 'report-answer-correct' : 'report-answer-incorrect'}`}
+                        >
+                          <span>Q{index + 1}:</span>
+                          <span>{isAnsCorrect ? 'Correct' : 'Incorrect'}</span>
+                        </div>
+                      );
+                    });
                   } catch (e) {
                     return <span style={{ color: 'var(--text-secondary)' }}>No question detail logs saved.</span>;
                   }
@@ -1536,6 +2088,193 @@ export default function App() {
                   disabled={resettingPassword}
                 >
                   {resettingPassword ? 'Resetting...' : 'Change Password'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADD STUDENT MODAL */}
+      {showAddStudentModal && (
+        <div className="modal-overlay" onClick={() => setShowAddStudentModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '450px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Register New Student</h3>
+              <button className="close-btn" onClick={() => setShowAddStudentModal(false)}>&times;</button>
+            </div>
+
+            <form onSubmit={handleSaveStudent}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px', fontSize: '13px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>Full Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. John Doe"
+                    value={studentName}
+                    onChange={e => setStudentName(e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>Roll Number</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. LHR-0042"
+                    value={studentRollNumber}
+                    onChange={e => setStudentRollNumber(e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>Grade Level Assign</label>
+                  <select
+                    value={studentClass}
+                    onChange={e => setStudentClass(e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                  >
+                    <option value="Nursery">Nursery</option>
+                    <option value="Grade 1">Grade 1</option>
+                    <option value="Grade 2">Grade 2</option>
+                    <option value="Grade 3">Grade 3</option>
+                    <option value="Grade 4">Grade 4</option>
+                    <option value="Grade 5">Grade 5</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowAddStudentModal(false)}
+                  disabled={isSavingStudent}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{
+                    backgroundColor: 'var(--color-primary, #6366f1)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '8px 16px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                  disabled={isSavingStudent}
+                >
+                  {isSavingStudent ? 'Registering...' : 'Register Student'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ADD STAFF MODAL */}
+      {showAddStaffModal && (
+        <div className="modal-overlay" onClick={() => setShowAddStaffModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Register New Staff Account</h3>
+              <button className="close-btn" onClick={() => setShowAddStaffModal(false)}>&times;</button>
+            </div>
+
+            <form onSubmit={handleSaveStaff}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '20px', fontSize: '13px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>Display Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Ms. Sarah Jenkins"
+                    value={staffName}
+                    onChange={e => setStaffName(e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                    required
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>Username</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. sarahj"
+                      value={staffUsername}
+                      onChange={e => setStaffUsername(e.target.value)}
+                      style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>System Role</label>
+                    <select
+                      value={staffRole}
+                      onChange={e => setStaffRole(e.target.value)}
+                      style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                    >
+                      <option value="teacher">Teacher</option>
+                      <option value="admin">Administrator</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>Email Address (Optional)</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. sarah.j@wisdomtree.edu"
+                    value={staffEmail}
+                    onChange={e => setStaffEmail(e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', color: 'var(--text-secondary)' }}>Sign-in Password (min 6 characters)</label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    value={staffPassword}
+                    onChange={e => setStaffPassword(e.target.value)}
+                    style={{ width: '100%', padding: '8px', border: '1px solid var(--border-color)', borderRadius: '4px', background: 'var(--bg-surface)', color: 'var(--text-primary)' }}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid var(--border-color)', paddingTop: '14px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowAddStaffModal(false)}
+                  disabled={isSavingStaff}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{
+                    backgroundColor: 'var(--color-primary, #6366f1)',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    padding: '8px 16px',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                  disabled={isSavingStaff}
+                >
+                  {isSavingStaff ? 'Registering...' : 'Register Staff Account'}
                 </button>
               </div>
             </form>
