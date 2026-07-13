@@ -161,12 +161,8 @@ export default function App() {
   const [isSavingQuestion, setIsSavingQuestion] = useState(false);
 
   // Supabase Connection Settings
-  const [supabaseUrl, setSupabaseUrl] = useState(() => {
-    return localStorage.getItem('supabase-url') || import.meta.env.VITE_SUPABASE_URL || '';
-  });
-  const [supabaseKey, setSupabaseKey] = useState(() => {
-    return localStorage.getItem('supabase-anon-key') || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-  });
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
   const [isConnected, setIsConnected] = useState(false);
   const [connectionError, setConnectionError] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
@@ -237,24 +233,7 @@ export default function App() {
     }
   }, [darkTheme]);
 
-  // Temp inputs for database settings page to avoid mutating active connection state prematurely
-  const [tempSupabaseUrl, setTempSupabaseUrl] = useState(supabaseUrl);
-  const [tempSupabaseKey, setTempSupabaseKey] = useState(supabaseKey);
-
-  // Sync temp inputs when the main credentials change
-  useEffect(() => {
-    setTempSupabaseUrl(supabaseUrl);
-    setTempSupabaseKey(supabaseKey);
-  }, [supabaseUrl, supabaseKey]);
-
-  // Redirect to Settings tab if not connected
-  useEffect(() => {
-    if (!isConnected && activeTab !== 'settings' && activeTab !== 'licensing') {
-      setActiveTab('settings');
-    }
-  }, [isConnected, activeTab]);
-
-  // Attempt connection on mount if keys are saved
+  // Attempt connection on mount
   useEffect(() => {
     if (supabaseUrl && supabaseKey) {
       handleConnect(true);
@@ -262,19 +241,16 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleConnect = async (isAuto = false, customUrl = null, customKey = null) => {
-    const targetUrl = customUrl || supabaseUrl;
-    const targetKey = customKey || supabaseKey;
-
-    if (!targetUrl || !targetKey) {
-      if (!isAuto) setConnectionError('Both Supabase URL and Anon Key are required.');
+  const handleConnect = async (isAuto = false) => {
+    if (!supabaseUrl || !supabaseKey) {
+      if (!isAuto) setConnectionError('Supabase URL and Anon Key are missing in environment variables.');
       return;
     }
 
     setIsConnecting(true);
     setConnectionError('');
     try {
-      const client = createClient(targetUrl, targetKey);
+      const client = createClient(supabaseUrl, supabaseKey);
       
       // Test the connection by doing a simple query on the students table.
       const { error } = await client.from('students').select('*').limit(1);
@@ -283,11 +259,6 @@ export default function App() {
         throw new Error(error.message);
       }
 
-      // Connection success
-      localStorage.setItem('supabase-url', targetUrl);
-      localStorage.setItem('supabase-anon-key', targetKey);
-      setSupabaseUrl(targetUrl);
-      setSupabaseKey(targetKey);
       setIsConnected(true);
       
       // Load all data
@@ -298,34 +269,6 @@ export default function App() {
     } finally {
       setIsConnecting(false);
     }
-  };
-
-  const handleDisconnect = (skipWarning = false) => {
-    if (skipWarning || window.confirm("Warning: You are about to disconnect from the database. All loaded data will be cleared until you reconnect. Do you want to proceed?")) {
-      setIsConnected(false);
-      localStorage.removeItem('supabase-url');
-      localStorage.removeItem('supabase-anon-key');
-      setStudents([]);
-      setTeachers([]);
-      setAssessments([]);
-      setAttendance([]);
-      setQuestions([]);
-    }
-  };
-
-  const handleSaveConnectionKeys = async (e) => {
-    e.preventDefault();
-    if (!tempSupabaseUrl.trim() || !tempSupabaseKey.trim()) {
-      alert('Both Supabase URL and Anon Key are required.');
-      return;
-    }
-
-    if (isConnected) {
-      const ok = window.confirm("Warning: Changing the Supabase credentials will disconnect the current session and try connecting to the new URL. Do you want to proceed?");
-      if (!ok) return;
-    }
-
-    await handleConnect(false, tempSupabaseUrl.trim(), tempSupabaseKey.trim());
   };
 
   const handleLogout = () => {
@@ -751,9 +694,39 @@ export default function App() {
     );
   }
 
+  // Render connection error screen if database connection failed
+  if (!isConnected) {
+    return (
+      <div className="conn-overlay">
+        <div className="card conn-card" style={{ maxWidth: '400px', width: '100%', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '16px', alignItems: 'center' }}>
+          <span style={{ fontSize: '48px' }}>🔌</span>
+          <h1 style={{ fontSize: '20px', margin: '8px 0', fontWeight: 'bold' }}>Database Connection Error</h1>
+          <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', lineHeight: 1.5, margin: 0 }}>
+            {connectionError || 'Could not establish connection to the remote Supabase database. Please check your network connection and environment variables configuration.'}
+          </p>
+          <button
+            onClick={() => handleConnect(false)}
+            className="btn btn-primary"
+            style={{ width: '100%', padding: '12px', fontWeight: 600 }}
+            disabled={isConnecting}
+          >
+            {isConnecting ? 'Connecting...' : 'Retry Connection'}
+          </button>
+          
+          <button className="btn btn-secondary" style={{ width: '100%' }} onClick={() => {
+            setIsAuthenticated(false);
+            sessionStorage.removeItem('owner-authenticated');
+          }}>
+            <LogOut size={16} />
+            <span>Log Out Admin</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const isTabLocked = (tabId) => {
-    if (tabId === 'settings' || tabId === 'licensing') return false;
-    return !isConnected;
+    return false;
   };
 
   const handleSidebarRefresh = async () => {
@@ -866,16 +839,6 @@ export default function App() {
               >
                 <Key size={18} />
                 <span>Issue License Key</span>
-              </button>
-            </li>
-            <li>
-              <button
-                className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-                onClick={() => setActiveTab('settings')}
-                style={{ width: '100%', display: 'flex', alignItems: 'center' }}
-              >
-                <Settings size={18} />
-                <span>Database Settings</span>
               </button>
             </li>
           </ul>
@@ -1575,99 +1538,7 @@ export default function App() {
             </div>
           </div>
         )}
-        {/* DATABASE SETTINGS TAB */}
-        {activeTab === 'settings' && (
-          <div className="card fade-in" style={{ maxWidth: '650px', margin: '0 auto' }}>
-            <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Settings size={20} className="color-primary" />
-              Supabase Database Connection settings
-            </h3>
 
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
-              Configure the connection keys to your remote cloud database. All franchise branches utilize this shared database to sync assessment scores, attendance logs, and student registrations.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div style={{
-                padding: '12px 16px',
-                borderRadius: '8px',
-                border: '1px solid var(--border-color)',
-                backgroundColor: isConnected ? 'rgba(34, 197, 94, 0.08)' : 'rgba(239, 68, 68, 0.08)',
-                color: isConnected ? 'var(--color-success)' : 'var(--color-error)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                fontSize: '14px',
-                fontWeight: 'bold'
-              }}>
-                <div style={{
-                  width: '8px',
-                  height: '8px',
-                  borderRadius: '50%',
-                  backgroundColor: isConnected ? 'var(--color-success)' : 'var(--color-error)'
-                }}></div>
-                Database Connection Status: {isConnected ? 'Connected & Operational' : 'Disconnected'}
-              </div>
-
-              {!isConnected && (
-                <div style={{
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(239, 68, 68, 0.2)',
-                  backgroundColor: 'rgba(239, 68, 68, 0.05)',
-                  color: 'var(--text-primary)',
-                  fontSize: '13px',
-                  lineHeight: '1.5'
-                }}>
-                  <strong>⚠️ Restricted Mode Enabled:</strong> When the database is disconnected, access to all other administrative panels (Overview, Students, Staff, Questions, Assessments, and Attendance) is locked for safety.
-                </div>
-              )}
-
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 'bold' }}>Supabase Project URL</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="https://your-project.supabase.co"
-                  value={tempSupabaseUrl}
-                  onChange={e => setTempSupabaseUrl(e.target.value)}
-                  style={{ fontFamily: 'monospace', fontSize: '13px' }}
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 'bold' }}>Supabase Anon Key / Service Key</label>
-                <input
-                  type="password"
-                  className="form-input"
-                  placeholder="eyJhbGciOiJIUzI1NiIsIn..."
-                  value={tempSupabaseKey}
-                  onChange={e => setTempSupabaseKey(e.target.value)}
-                  style={{ fontFamily: 'monospace', fontSize: '13px' }}
-                />
-              </div>
-
-              <div className="flex justify-end gap-sm" style={{ borderTop: '1px solid var(--border-color)', paddingTop: '18px', marginTop: '10px' }}>
-                {isConnected && (
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => handleDisconnect(false)}
-                    style={{ color: 'var(--color-error)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
-                  >
-                    Disconnect Database
-                  </button>
-                )}
-                <button
-                  className="btn btn-primary"
-                  onClick={handleSaveConnectionKeys}
-                  disabled={!tempSupabaseUrl.trim() || !tempSupabaseKey.trim()}
-                >
-                  Save &amp; Establish Connection
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* ACTIVITY LOGS TAB */}
         {activeTab === 'logs' && (
