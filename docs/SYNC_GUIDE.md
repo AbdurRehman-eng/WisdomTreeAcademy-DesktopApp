@@ -79,6 +79,7 @@ CREATE TABLE IF NOT EXISTS question_bank (
   audio_text TEXT,
   options_json TEXT,
   correct_answer TEXT,
+  image_path TEXT,
   status TEXT DEFAULT 'active',
   updated_at BIGINT
 );
