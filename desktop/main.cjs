@@ -40,6 +40,21 @@ function initDatabase() {
   if (!columns.some(c => c.name === 'image_path')) {
     db.prepare("ALTER TABLE question_bank ADD COLUMN image_path TEXT").run();
   }
+
+  // Ensure unique index on attendance for conflict resolution (upsert)
+  try {
+    db.prepare(`
+      DELETE FROM attendance
+      WHERE rowid NOT IN (
+        SELECT MAX(rowid)
+        FROM attendance
+        GROUP BY type, target_id, date
+      )
+    `).run();
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_unique ON attendance(type, target_id, date)").run();
+  } catch (err) {
+    console.error("Migration error for attendance index:", err);
+  }
   
   // Seed initial data if empty
   seedDatabase();
@@ -373,25 +388,30 @@ function registerIpcHandlers() {
     return db.prepare("SELECT * FROM attendance WHERE date = ? AND type = ?").all(date, type);
   });
   ipcMain.handle('db:save-attendance', (event, records) => {
-    const now = Date.now();
-    const insert = db.prepare(`
-      INSERT INTO attendance (id, type, target_id, date, status, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, 'pending', ?)
-      ON CONFLICT(type, target_id, date) DO UPDATE SET
-        status = excluded.status,
-        sync_status = 'pending',
-        updated_at = excluded.updated_at
-    `);
+    try {
+      const now = Date.now();
+      const insert = db.prepare(`
+        INSERT INTO attendance (id, type, target_id, date, status, sync_status, updated_at)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?)
+        ON CONFLICT(type, target_id, date) DO UPDATE SET
+          status = excluded.status,
+          sync_status = 'pending',
+          updated_at = excluded.updated_at
+      `);
 
-    const transaction = db.transaction((list) => {
-      for (const rec of list) {
-        const id = rec.id || crypto.randomUUID();
-        insert.run(id, rec.type, rec.target_id, rec.date, rec.status, now);
-      }
-    });
+      const transaction = db.transaction((list) => {
+        for (const rec of list) {
+          const id = rec.id || crypto.randomUUID();
+          insert.run(id, rec.type, rec.target_id, rec.date, rec.status, now);
+        }
+      });
 
-    transaction(records);
-    return { success: true };
+      transaction(records);
+      return { success: true };
+    } catch (err) {
+      console.error("Error in db:save-attendance:", err);
+      return { success: false, error: err.message };
+    }
   });
 
   // Assessments

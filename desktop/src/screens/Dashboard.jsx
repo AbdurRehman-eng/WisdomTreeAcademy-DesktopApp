@@ -103,14 +103,14 @@ export const Dashboard = () => {
               </div>
             </div>
 
-            <div className="card metric-card">
+            <div className="card metric-card" onClick={() => setScreen('attendance')} style={{ cursor: 'pointer' }}>
               <div className="metric-icon-bg success">
                 <CalendarCheck2 size={22} />
               </div>
               <div className="metric-details">
                 <span className="metric-label">Today's Attendance</span>
                 <span className="metric-value">{dashboardData.todayAttendanceRate}</span>
-                <span className="metric-change positive">All systems operational</span>
+                <span className="metric-change positive">Click to view registry</span>
               </div>
             </div>
 
@@ -247,7 +247,7 @@ export const Dashboard = () => {
               </div>
             </div>
 
-            <div className="card metric-card">
+            <div className="card metric-card" onClick={() => setScreen('attendance')} style={{ cursor: 'pointer' }}>
               <div className="metric-icon-bg accent">
                 <CalendarCheck2 size={22} />
               </div>
