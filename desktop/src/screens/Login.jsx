@@ -2,38 +2,14 @@ import React, { useState } from 'react';
 import './Login.css';
 import { useApp } from '../context/AppContext';
 import { useTheme } from '../context/ThemeContext';
-import Button from '../components/common/Button';
-import { ShieldCheck, GraduationCap, KeyRound, Monitor, Sun, Moon, User } from 'lucide-react';
+import { KeyRound, Monitor, Sun, Moon, User } from 'lucide-react';
 
 export const Login = () => {
   const { login, showToast } = useApp();
   const { theme, toggleTheme } = useTheme();
   
-  const [selectedTab, setSelectedTab] = useState('admin'); // 'admin', 'teacher', 'custom'
-  const [username, setUsername] = useState('vance.admin');
-  const [password, setPassword] = useState('password');
-
-  const handleSelectAdminTab = () => {
-    setSelectedTab('admin');
-    setUsername('vance.admin');
-    setPassword('password');
-  };
-
-  const handleSelectTeacherTab = () => {
-    setSelectedTab('teacher');
-    setUsername('mercer.teach');
-    setPassword('password');
-  };
-
-  const handleUsernameChange = (val) => {
-    setUsername(val);
-    setSelectedTab('custom');
-  };
-
-  const handlePasswordChange = (val) => {
-    setPassword(val);
-    setSelectedTab('custom');
-  };
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
 
   const handleFormSubmit = async (e) => {
     e.preventDefault();
@@ -58,7 +34,7 @@ export const Login = () => {
       {/* Main card */}
       <div className="login-card-container">
         {/* Toggle Theme in Login */}
-        <button onClick={toggleTheme} className="login-theme-toggle" title="Toggle Theme">
+        <button type="button" onClick={toggleTheme} className="login-theme-toggle" title="Toggle Theme">
           {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
         </button>
 
@@ -70,27 +46,6 @@ export const Login = () => {
 
         {/* Form */}
         <form onSubmit={handleFormSubmit} className="login-form-block">
-          {/* Quick presets tab selection */}
-          <div className="login-role-selector-row">
-            <button
-              type="button"
-              onClick={handleSelectAdminTab}
-              className={`role-tile-btn ${selectedTab === 'admin' ? 'active' : ''}`}
-            >
-              <ShieldCheck size={20} className="role-tile-icon" />
-              <span className="role-tile-label">Admin Preset</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleSelectTeacherTab}
-              className={`role-tile-btn ${selectedTab === 'teacher' ? 'active' : ''}`}
-            >
-              <GraduationCap size={20} className="role-tile-icon" />
-              <span className="role-tile-label">Teacher Preset</span>
-            </button>
-          </div>
-
           <div className="form-group">
             <label className="form-label">Username or Email</label>
             <div className="password-input-wrapper">
@@ -100,7 +55,7 @@ export const Login = () => {
                 className="form-input password-input-field"
                 placeholder="Enter username or email..."
                 value={username}
-                onChange={(e) => handleUsernameChange(e.target.value)}
+                onChange={(e) => setUsername(e.target.value)}
               />
             </div>
           </div>
@@ -114,7 +69,7 @@ export const Login = () => {
                 className="form-input password-input-field"
                 placeholder="••••••••"
                 value={password}
-                onChange={(e) => handlePasswordChange(e.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
               />
             </div>
           </div>
