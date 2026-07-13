@@ -98,11 +98,12 @@ CREATE TABLE IF NOT EXISTS assessments (
 -- Attendance
 CREATE TABLE IF NOT EXISTS attendance (
   id TEXT PRIMARY KEY,
-  type TEXT,
-  target_id TEXT,
-  date TEXT,
-  status TEXT,
-  updated_at BIGINT
+  type TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  date TEXT NOT NULL,
+  status TEXT NOT NULL,
+  updated_at BIGINT,
+  UNIQUE(type, target_id, date)
 );
 ```
 

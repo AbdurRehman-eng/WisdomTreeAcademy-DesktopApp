@@ -107,12 +107,15 @@ export const Reports = () => {
           ${results.length > 0 ? `
           <div class="section-title">Question-by-Question Breakdown</div>
           <div class="answer-grid">
-            ${results.map((r, i) => `
-              <div class="answer-item ${r.correct ? 'correct' : 'wrong'}">
-                <div class="answer-q">Q${i + 1}</div>
-                <div class="answer-mark">${r.correct ? '✅' : '❌'}</div>
-              </div>
-            `).join('')}
+            ${results.map((r, i) => {
+              const isCorrect = r.isCorrect !== undefined ? r.isCorrect : r.correct;
+              return `
+                <div class="answer-item ${isCorrect ? 'correct' : 'wrong'}">
+                  <div class="answer-q">Q${i + 1}</div>
+                  <div class="answer-mark">${isCorrect ? '✅' : '❌'}</div>
+                </div>
+              `;
+            }).join('')}
           </div>` : ''}
           <div class="signatures-row">
             <div class="sig-block"><div class="sig-line"></div><div class="sig-label">Teacher / Assessor</div></div>
