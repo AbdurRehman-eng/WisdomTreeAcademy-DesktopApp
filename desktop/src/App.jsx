@@ -19,17 +19,17 @@ import Reports from './screens/Reports';
 import SyncSettings from './screens/SyncSettings';
 
 const screenRoles = {
-  'dashboard': ['admin', 'teacher'],
-  'students': ['admin', 'teacher'],
-  'teachers-admins': ['admin'],
-  'classes-subjects': ['admin'],
-  'question-bank': ['admin', 'teacher'],
-  'assessment-setup': ['admin', 'teacher'],
-  'assessment-runner': ['admin', 'teacher'],
-  'assessment-results': ['admin', 'teacher'],
-  'attendance': ['admin', 'teacher'],
-  'reports': ['admin', 'teacher'],
-  'sync-settings': ['admin']
+  'dashboard': ['owner', 'admin', 'it_administrator', 'head_teacher', 'accountant', 'secretary', 'teacher'],
+  'students': ['owner', 'admin', 'head_teacher', 'secretary', 'teacher'],
+  'teachers-admins': ['owner', 'admin', 'it_administrator', 'head_teacher'],
+  'classes-subjects': ['owner', 'admin', 'it_administrator', 'head_teacher'],
+  'question-bank': ['owner', 'admin', 'head_teacher', 'teacher'],
+  'assessment-setup': ['owner', 'admin', 'head_teacher', 'teacher'],
+  'assessment-runner': ['owner', 'admin', 'head_teacher', 'teacher'],
+  'assessment-results': ['owner', 'admin', 'head_teacher', 'teacher'],
+  'attendance': ['owner', 'admin', 'head_teacher', 'secretary', 'teacher'],
+  'reports': ['owner', 'admin', 'head_teacher', 'accountant', 'secretary', 'teacher'],
+  'sync-settings': ['owner', 'admin', 'it_administrator']
 };
 
 function MainAppContent() {

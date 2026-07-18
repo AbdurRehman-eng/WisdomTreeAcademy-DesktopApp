@@ -9,10 +9,16 @@ CREATE TABLE IF NOT EXISTS teachers_admins (
     id TEXT PRIMARY KEY,
     username TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
-    role TEXT NOT NULL, -- 'admin', 'teacher'
+    role TEXT NOT NULL, -- 'owner', 'admin', 'it_administrator', 'head_teacher', 'accountant', 'secretary', 'teacher'
     name TEXT NOT NULL,
     email TEXT,
-    status TEXT DEFAULT 'active', -- 'active', 'deleted'
+    phone_number TEXT,
+    employee_id TEXT,
+    hire_date TEXT,
+    assigned_classes_json TEXT, -- JSON array of assigned class names
+    assigned_subjects_json TEXT, -- JSON array of assigned subject names
+    last_login INTEGER,
+    status TEXT DEFAULT 'active', -- 'active', 'suspended', 'inactive', 'deleted'
     sync_status TEXT DEFAULT 'synced', -- 'synced', 'pending'
     updated_at INTEGER NOT NULL
 );
@@ -51,7 +57,8 @@ CREATE TABLE IF NOT EXISTS question_bank (
     audio_text TEXT,
     options_json TEXT NOT NULL, -- JSON array of MCQ options
     correct_answer TEXT NOT NULL,
-    status TEXT DEFAULT 'active',
+    approval_status TEXT DEFAULT 'approved', -- 'approved', 'pending_approval'
+    status TEXT DEFAULT 'active', -- 'active', 'archived', 'deleted'
     sync_status TEXT DEFAULT 'synced',
     updated_at INTEGER NOT NULL
 );
@@ -84,4 +91,28 @@ CREATE TABLE IF NOT EXISTS sync_log (
     sync_time INTEGER NOT NULL,
     status TEXT NOT NULL, -- 'success', 'failed'
     changes_synced INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    details TEXT,
+    timestamp INTEGER NOT NULL,
+    sync_status TEXT DEFAULT 'pending'
+);
+
+CREATE TABLE IF NOT EXISTS question_versions (
+    id TEXT PRIMARY KEY,
+    question_id TEXT NOT NULL,
+    class TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    text TEXT NOT NULL,
+    audio_text TEXT,
+    options_json TEXT NOT NULL,
+    correct_answer TEXT NOT NULL,
+    version_number INTEGER NOT NULL,
+    changed_by TEXT NOT NULL,
+    sync_status TEXT DEFAULT 'pending',
+    updated_at INTEGER NOT NULL
 );

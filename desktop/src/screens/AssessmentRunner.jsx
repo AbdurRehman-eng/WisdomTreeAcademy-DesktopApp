@@ -49,7 +49,7 @@ export const AssessmentRunner = () => {
 
     const loadQuestions = async () => {
       if (window.api) {
-        const dbQs = await window.api.getQuestions();
+        const dbQs = await window.api.getQuestions({ includeAll: false });
         // Filter by student class and selected subject
         const filtered = dbQs.filter(
           q => q.class === activeAssessment.class && q.subject === activeAssessment.subject

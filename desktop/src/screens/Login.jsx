@@ -5,7 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { KeyRound, Monitor, Sun, Moon, User } from 'lucide-react';
 
 export const Login = () => {
-  const { login, showToast } = useApp();
+  const { login, showToast, schoolLogo } = useApp();
   const { theme, toggleTheme } = useTheme();
   
   const [username, setUsername] = useState('');
@@ -39,7 +39,13 @@ export const Login = () => {
         </button>
 
         <div className="login-card-header">
-          <div className="login-logo-badge">🌳</div>
+          <div className="login-logo-badge">
+            {schoolLogo ? (
+              <img src={schoolLogo} alt="School Logo" className="login-custom-logo" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 'inherit' }} />
+            ) : (
+              "🌳"
+            )}
+          </div>
           <h1 className="login-brand-title">Wisdom Tree Academy</h1>
           <p className="login-brand-tagline">Diagnostic Assessment & School Management System</p>
         </div>
@@ -75,7 +81,7 @@ export const Login = () => {
           </div>
 
           <button type="submit" className="login-submit-action-btn">
-            Authenticate & Launch Registry
+            Sign In
           </button>
         </form>
 

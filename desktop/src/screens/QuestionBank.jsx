@@ -8,12 +8,13 @@ import { Plus, Download, Upload, Filter, Mic, Square, Play } from 'lucide-react'
 import useTTS from '../hooks/useTTS';
 
 export const QuestionBank = () => {
-  const { showToast, refreshSyncInfo } = useApp();
+  const { user, showToast, refreshSyncInfo } = useApp();
   const csvFileInputRef = useRef(null);
   const [questions, setQuestions] = useState([]);
   const [selectedGrade, setSelectedGrade] = useState('All');
   const [selectedSubject, setSelectedSubject] = useState('All');
   const [selectedDifficulty, setSelectedDifficulty] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState('All');
 
   // Modal forms states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -27,6 +28,11 @@ export const QuestionBank = () => {
   const [formSubject, setFormSubject] = useState('');
   const [formDifficulty, setFormDifficulty] = useState('Medium');
   const [imagePath, setImagePath] = useState('');
+
+  // Version History Modal states
+  const [isVersionModalOpen, setIsVersionModalOpen] = useState(false);
+  const [selectedQuestionVersions, setSelectedQuestionVersions] = useState([]);
+  const [versionQuestionText, setVersionQuestionText] = useState('');
 
   // Mock audio recorder states
   const [isRecording, setIsRecording] = useState(false);
@@ -47,20 +53,23 @@ export const QuestionBank = () => {
   const [gradesList, setGradesList] = useState(['All']);
   const [subjectsList, setSubjectsList] = useState(['All']);
   const difficultiesList = ['All', 'Easy', 'Medium', 'Hard'];
+  const statusList = ['All', 'approved', 'pending', 'archived'];
 
   const fetchQuestions = async () => {
     if (window.api) {
-      const list = await window.api.getQuestions();
+      const list = await window.api.getQuestions({ includeAll: true });
       const mapped = list.map(q => ({
         id: q.id,
         grade: q.class,
         subject: q.subject,
-        difficulty: 'Medium', // Fallback since SQLite schema does not track difficulty
+        difficulty: 'Medium', // Fallback
         text: q.text,
         options: q.options,
         correct: q.correct_answer,
         audioText: q.audio_text || q.text,
-        image_path: q.image_path
+        image_path: q.image_path,
+        is_approved: q.is_approved,
+        status: q.status || 'pending'
       }));
       setQuestions(mapped);
     }
@@ -99,7 +108,8 @@ export const QuestionBank = () => {
     const matchGrade = selectedGrade === 'All' || q.grade === selectedGrade;
     const matchSubject = selectedSubject === 'All' || q.subject === selectedSubject;
     const matchDiff = selectedDifficulty === 'All' || q.difficulty === selectedDifficulty;
-    return matchGrade && matchSubject && matchDiff;
+    const matchStatus = selectedStatus === 'All' || q.status === selectedStatus;
+    return matchGrade && matchSubject && matchDiff && matchStatus;
   });
 
   const handleRecordToggle = () => {
@@ -132,7 +142,8 @@ export const QuestionBank = () => {
       audioText: newQuestionText,
       options: [optA, optB, optC, optD],
       correct_answer: correctOpt,
-      image_path: imagePath || null
+      image_path: imagePath || null,
+      currentUserId: user?.id
     };
 
     if (window.api) {
@@ -159,15 +170,54 @@ export const QuestionBank = () => {
   };
 
   const handleDelete = async (id) => {
+    if (confirm('Are you sure you want to permanently delete this question? This action is irreversible.')) {
+      if (window.api) {
+        const res = await window.api.deleteQuestion(id, user?.id);
+        if (res.success) {
+          showToast(`Question deleted permanently.`, 'success');
+          fetchQuestions();
+          refreshSyncInfo();
+        } else {
+          showToast(res.error || 'Failed to delete question.', 'error');
+        }
+      }
+    }
+  };
+
+  const handleArchive = async (id) => {
+    if (confirm('Are you sure you want to archive this question? It will no longer be active for student assessments.')) {
+      if (window.api) {
+        const res = await window.api.archiveQuestion(id, user?.id);
+        if (res.success) {
+          showToast('Question archived successfully.', 'success');
+          fetchQuestions();
+          refreshSyncInfo();
+        } else {
+          showToast(res.error || 'Failed to archive question.', 'error');
+        }
+      }
+    }
+  };
+
+  const handleApprove = async (id) => {
     if (window.api) {
-      const res = await window.api.deleteQuestion(id);
+      const res = await window.api.approveQuestion(id, user?.id);
       if (res.success) {
-        showToast(`Question deleted.`, 'success');
+        showToast('Question approved successfully.', 'success');
         fetchQuestions();
         refreshSyncInfo();
       } else {
-        showToast(res.error || 'Failed to delete question.', 'error');
+        showToast(res.error || 'Failed to approve question.', 'error');
       }
+    }
+  };
+
+  const handleViewVersions = async (q) => {
+    if (window.api) {
+      const versions = await window.api.getQuestionVersions(q.id);
+      setSelectedQuestionVersions(versions);
+      setVersionQuestionText(q.text);
+      setIsVersionModalOpen(true);
     }
   };
 
@@ -230,7 +280,9 @@ export const QuestionBank = () => {
         return;
       }
       if (window.api) {
-        const res = await window.api.importQuestions(rows);
+        // Pass currentUserId for audit logs
+        const rowsWithUser = rows.map(r => ({ ...r, currentUserId: user?.id }));
+        const res = await window.api.importQuestions(rowsWithUser);
         if (res.success) {
           showToast(`Successfully imported ${rows.length} question(s) into the local bank.`, 'success');
           fetchQuestions();
@@ -245,6 +297,19 @@ export const QuestionBank = () => {
     };
     reader.onerror = () => showToast('Failed to read the CSV file.', 'error');
     reader.readAsText(file);
+  };
+
+  const getStatusBadgeStyle = (status) => {
+    switch (status) {
+      case 'approved':
+        return { display: 'inline-block', fontSize: '11px', padding: '2px 8px', borderRadius: '12px', fontWeight: '600', textTransform: 'uppercase', backgroundColor: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', border: '1px solid rgba(34, 197, 94, 0.2)' };
+      case 'pending':
+        return { display: 'inline-block', fontSize: '11px', padding: '2px 8px', borderRadius: '12px', fontWeight: '600', textTransform: 'uppercase', backgroundColor: 'rgba(234, 179, 8, 0.1)', color: '#ca8a04', border: '1px solid rgba(234, 179, 8, 0.2)' };
+      case 'archived':
+        return { display: 'inline-block', fontSize: '11px', padding: '2px 8px', borderRadius: '12px', fontWeight: '600', textTransform: 'uppercase', backgroundColor: 'rgba(156, 163, 175, 0.1)', color: '#9ca3af', border: '1px solid rgba(156, 163, 175, 0.2)' };
+      default:
+        return {};
+    }
   };
 
   return (
@@ -332,6 +397,19 @@ export const QuestionBank = () => {
             </select>
           </div>
 
+          <div className="form-group">
+            <label className="form-label">Approval Status</label>
+            <select
+              className="form-select"
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+            >
+              {statusList.map(st => (
+                <option key={st} value={st}>{st === 'All' ? 'All' : st.toUpperCase()}</option>
+              ))}
+            </select>
+          </div>
+
           <div className="filter-stats-card">
             <span className="stats-header">Question Pool Summary</span>
             <div className="stats-row">
@@ -352,9 +430,12 @@ export const QuestionBank = () => {
               {filteredQuestions.map((q) => (
                 <div key={q.id} className="card question-preview-card fade-in">
                   <div className="qp-card-header">
-                    <div className="qp-badge-group">
+                    <div className="qp-badge-group" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                       <span className="qp-badge qp-badge-grade">{q.grade}</span>
                       <span className="qp-badge qp-badge-subject">{q.subject}</span>
+                      <span style={getStatusBadgeStyle(q.status)}>
+                        {q.status}
+                      </span>
                     </div>
                     <span className={`qp-difficulty-tag diff-${q.difficulty.toLowerCase()}`}>
                       {q.difficulty}
@@ -386,8 +467,44 @@ export const QuestionBank = () => {
                   {/* Audio Controls */}
                   <div className="qp-card-footer">
                     <AudioControl audioText={q.audioText} />
-                    <div className="qp-actions-links">
-                      <button className="qp-action-btn-link delete" onClick={() => handleDelete(q.id)}>Delete</button>
+                    <div className="qp-actions-links" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                      <button 
+                        type="button" 
+                        style={{ color: 'var(--primary-color, #3b82f6)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} 
+                        onClick={() => handleViewVersions(q)}
+                      >
+                        History
+                      </button>
+                      
+                      {q.status === 'pending' && ['owner', 'admin', 'head_teacher'].includes(user?.role) && (
+                        <button 
+                          type="button" 
+                          style={{ color: '#22c55e', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontWeight: '600' }} 
+                          onClick={() => handleApprove(q.id)}
+                        >
+                          Approve
+                        </button>
+                      )}
+
+                      {user?.role === 'owner' ? (
+                        <button 
+                          type="button" 
+                          className="qp-action-btn-link delete" 
+                          onClick={() => handleDelete(q.id)}
+                        >
+                          Delete
+                        </button>
+                      ) : (
+                        q.status !== 'archived' && (
+                          <button 
+                            type="button" 
+                            style={{ color: 'var(--text-secondary, #9ca3af)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} 
+                            onClick={() => handleArchive(q.id)}
+                          >
+                            Archive
+                          </button>
+                        )
+                      )}
                     </div>
                   </div>
                 </div>
@@ -397,7 +514,7 @@ export const QuestionBank = () => {
             <div className="card qb-empty-state">
               🌳
               <h3>No matching questions found</h3>
-              <p className="text-muted">Try adjusting the grade levels, subject categories, or add a new question to this pool.</p>
+              <p className="text-muted">Try adjusting the grade levels, subject categories, status, or add a new question to this pool.</p>
               <Button variant="primary" onClick={() => setIsAddModalOpen(true)}>Add First Question</Button>
             </div>
           )}
@@ -514,8 +631,8 @@ export const QuestionBank = () => {
                   </button>
                 </div>
               )}
-              </div>
             </div>
+          </div>
 
           {/* Waveform recorder simulation component */}
           <div className="qb-voice-recorder-mock">
@@ -572,6 +689,54 @@ export const QuestionBank = () => {
             </span>
           </div>
         </form>
+      </Modal>
+
+      {/* Question Versions Modal */}
+      <Modal
+        isOpen={isVersionModalOpen}
+        onClose={() => { setIsVersionModalOpen(false); setSelectedQuestionVersions([]); }}
+        title={`Version History - "${versionQuestionText.substring(0, 30)}..."`}
+        maxWidth="700px"
+        footer={
+          <Button variant="secondary" onClick={() => { setIsVersionModalOpen(false); setSelectedQuestionVersions([]); }}>Close</Button>
+        }
+      >
+        <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+          {selectedQuestionVersions.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {selectedQuestionVersions.map((v) => {
+                let opts = [];
+                try {
+                  opts = JSON.parse(v.options_json || '[]');
+                } catch(e) {}
+                return (
+                  <div key={v.id} style={{ border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', background: 'var(--bg-secondary)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', borderBottom: '1px solid var(--border-color)', paddingBottom: '6px' }}>
+                      <span style={{ fontWeight: 'bold', color: 'var(--text-primary)' }}>Version {v.version_number}</span>
+                      <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                        By: <strong style={{ color: 'var(--text-primary)' }}>{v.changed_by}</strong> on {new Date(Number(v.timestamp)).toLocaleString()}
+                      </span>
+                    </div>
+                    <p style={{ margin: '0 0 12px 0', fontSize: '15px', color: 'var(--text-primary)' }}>{v.text}</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      {opts.map((opt, idx) => {
+                        const letter = String.fromCharCode(65 + idx);
+                        const isCorrect = letter === v.correct_answer;
+                        return (
+                          <div key={idx} style={{ padding: '6px 10px', borderRadius: '4px', border: '1px solid var(--border-color)', background: isCorrect ? 'rgba(34, 197, 94, 0.1)' : 'none', color: isCorrect ? 'var(--color-success, #22c55e)' : 'var(--text-secondary)', display: 'flex', gap: '6px' }}>
+                            <strong style={{ color: 'var(--text-primary)' }}>{letter}:</strong> {opt}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>No version history found for this question.</p>
+          )}
+        </div>
       </Modal>
     </div>
   );

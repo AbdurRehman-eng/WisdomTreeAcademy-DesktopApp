@@ -41,6 +41,71 @@ function initDatabase() {
     db.prepare("ALTER TABLE question_bank ADD COLUMN image_path TEXT").run();
   }
 
+  // Self-healing database migrations for teachers_admins new columns
+  const staffCols = db.prepare("PRAGMA table_info(teachers_admins)").all();
+  const staffColNames = staffCols.map(c => c.name);
+  if (!staffColNames.includes('phone_number')) {
+    db.prepare("ALTER TABLE teachers_admins ADD COLUMN phone_number TEXT").run();
+  }
+  if (!staffColNames.includes('employee_id')) {
+    db.prepare("ALTER TABLE teachers_admins ADD COLUMN employee_id TEXT").run();
+  }
+  if (!staffColNames.includes('hire_date')) {
+    db.prepare("ALTER TABLE teachers_admins ADD COLUMN hire_date TEXT").run();
+  }
+  if (!staffColNames.includes('assigned_classes_json')) {
+    db.prepare("ALTER TABLE teachers_admins ADD COLUMN assigned_classes_json TEXT").run();
+  }
+  if (!staffColNames.includes('assigned_subjects_json')) {
+    db.prepare("ALTER TABLE teachers_admins ADD COLUMN assigned_subjects_json TEXT").run();
+  }
+  if (!staffColNames.includes('last_login')) {
+    db.prepare("ALTER TABLE teachers_admins ADD COLUMN last_login INTEGER").run();
+  }
+
+  // Self-healing migrations for question_bank new columns
+  const qCols = db.prepare("PRAGMA table_info(question_bank)").all();
+  const qColNames = qCols.map(c => c.name);
+  if (!qColNames.includes('approval_status')) {
+    db.prepare("ALTER TABLE question_bank ADD COLUMN approval_status TEXT DEFAULT 'approved'").run();
+  }
+  // Initialize existing questions to 'approved'
+  try {
+    db.prepare("UPDATE question_bank SET approval_status = 'approved' WHERE approval_status IS NULL").run();
+  } catch (err) {
+    console.error("Migration error initializing approval status:", err);
+  }
+
+  // Create audit_logs table
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      details TEXT,
+      timestamp INTEGER NOT NULL,
+      sync_status TEXT DEFAULT 'pending'
+    )
+  `).run();
+
+  // Create question_versions table
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS question_versions (
+      id TEXT PRIMARY KEY,
+      question_id TEXT NOT NULL,
+      class TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      text TEXT NOT NULL,
+      audio_text TEXT,
+      options_json TEXT NOT NULL,
+      correct_answer TEXT NOT NULL,
+      version_number INTEGER NOT NULL,
+      changed_by TEXT NOT NULL,
+      sync_status TEXT DEFAULT 'pending',
+      updated_at INTEGER NOT NULL
+    )
+  `).run();
+
   // Ensure unique index on attendance for conflict resolution (upsert)
   try {
     db.prepare(`
@@ -130,6 +195,20 @@ function seedDatabase() {
   }
 }
 
+// Audit Logger Helper
+function writeAuditLog(userId, action, details) {
+  try {
+    const id = crypto.randomUUID();
+    const now = Date.now();
+    db.prepare(`
+      INSERT INTO audit_logs (id, user_id, action, details, timestamp, sync_status)
+      VALUES (?, ?, ?, ?, ?, 'pending')
+    `).run(id, userId || 'unknown', action, details, now);
+  } catch (err) {
+    console.error("Error writing audit log:", err);
+  }
+}
+
 // Window Management
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -180,7 +259,6 @@ function registerIpcHandlers() {
   });
   ipcMain.on('window:close', () => mainWindow?.close());
 
-  // Auth IPC
   ipcMain.handle('db:login', (event, username, password) => {
     try {
       const user = db.prepare("SELECT * FROM teachers_admins WHERE username = ? AND status = 'active'").get(username);
@@ -189,9 +267,29 @@ function registerIpcHandlers() {
       const isValid = verifyPassword(password, user.password_hash);
       if (!isValid) return { success: false, error: 'Invalid credentials.' };
 
+      const now = Date.now();
+      // Update last_login
+      db.prepare("UPDATE teachers_admins SET last_login = ?, sync_status = 'pending', updated_at = ? WHERE id = ?")
+        .run(now, now, user.id);
+
+      writeAuditLog(user.id, 'LOGIN', `User ${user.username} logged in successfully`);
+
       return {
         success: true,
-        user: { id: user.id, username: user.username, role: user.role, name: user.name, email: user.email }
+        user: { 
+          id: user.id, 
+          username: user.username, 
+          role: user.role, 
+          name: user.name, 
+          email: user.email,
+          phone_number: user.phone_number,
+          employee_id: user.employee_id,
+          hire_date: user.hire_date,
+          assigned_classes_json: user.assigned_classes_json,
+          assigned_subjects_json: user.assigned_subjects_json,
+          last_login: now,
+          status: user.status
+        }
       };
     } catch (e) {
       console.error(e);
@@ -246,27 +344,57 @@ function registerIpcHandlers() {
 
   // Teachers/Admins IPC
   ipcMain.handle('db:get-teachers', () => {
-    return db.prepare("SELECT id, username, role, name, email FROM teachers_admins WHERE status = 'active'").all();
+    return db.prepare(`
+      SELECT id, username, role, name, email, phone_number, employee_id, hire_date, 
+             assigned_classes_json, assigned_subjects_json, last_login, status 
+      FROM teachers_admins 
+      WHERE status != 'deleted'
+    `).all();
   });
   ipcMain.handle('db:save-teacher', (event, teacher) => {
-    const { id, username, password, role, name, email } = teacher;
+    const { id, username, password, role, name, email, phone_number, employee_id, hire_date, assigned_classes_json, assigned_subjects_json, status, currentUserId } = teacher;
     const now = Date.now();
     const idToUse = id || crypto.randomUUID();
-    
+    const targetStatus = status || 'active';
+
+    // Safety check: protect the Owner/Super Admin account
+    if (id) {
+      const existing = db.prepare("SELECT * FROM teachers_admins WHERE id = ?").get(id);
+      if (existing && (existing.role === 'owner' || existing.username === 'admin' || existing.username === 'owner')) {
+        // Enforce that role remains owner and status remains active
+        if (role !== existing.role || targetStatus !== 'active') {
+          return { success: false, error: 'Cannot deactivate or change the role of the Owner / Super Admin account.' };
+        }
+      }
+    }
+
     if (password) {
       const hash = hashPassword(password);
       db.prepare(`
-        INSERT INTO teachers_admins (id, username, password_hash, role, name, email, status, sync_status, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
+        INSERT INTO teachers_admins (
+          id, username, password_hash, role, name, email, phone_number, employee_id, 
+          hire_date, assigned_classes_json, assigned_subjects_json, status, sync_status, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
         ON CONFLICT(id) DO UPDATE SET
           username = excluded.username,
           password_hash = excluded.password_hash,
           role = excluded.role,
           name = excluded.name,
           email = excluded.email,
+          phone_number = excluded.phone_number,
+          employee_id = excluded.employee_id,
+          hire_date = excluded.hire_date,
+          assigned_classes_json = excluded.assigned_classes_json,
+          assigned_subjects_json = excluded.assigned_subjects_json,
+          status = excluded.status,
           sync_status = 'pending',
           updated_at = excluded.updated_at
-      `).run(idToUse, username, hash, role, name, email, now);
+      `).run(
+        idToUse, username, hash, role, name, email || null, phone_number || null, 
+        employee_id || null, hire_date || null, assigned_classes_json || '[]', 
+        assigned_subjects_json || '[]', targetStatus, now
+      );
     } else {
       db.prepare(`
         UPDATE teachers_admins SET
@@ -274,17 +402,38 @@ function registerIpcHandlers() {
           role = ?,
           name = ?,
           email = ?,
+          phone_number = ?,
+          employee_id = ?,
+          hire_date = ?,
+          assigned_classes_json = ?,
+          assigned_subjects_json = ?,
+          status = ?,
           sync_status = 'pending',
           updated_at = ?
         WHERE id = ?
-      `).run(username, role, name, email, now, idToUse);
+      `).run(
+        username, role, name, email || null, phone_number || null, employee_id || null, 
+        hire_date || null, assigned_classes_json || '[]', assigned_subjects_json || '[]', 
+        targetStatus, now, idToUse
+      );
     }
+
+    writeAuditLog(currentUserId || 'unknown', 'SAVE_TEACHER', `Saved/Updated staff registry for ${name} (${role})`);
     return { success: true, id: idToUse };
   });
-  ipcMain.handle('db:delete-teacher', (event, id) => {
-    const now = Date.now();
-    db.prepare("UPDATE teachers_admins SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
-    return { success: true };
+  ipcMain.handle('db:delete-teacher', (event, id, currentUserId) => {
+    try {
+      const existing = db.prepare("SELECT * FROM teachers_admins WHERE id = ?").get(id);
+      if (existing && (existing.role === 'owner' || existing.username === 'admin' || existing.username === 'owner')) {
+        return { success: false, error: 'Cannot delete the Owner / Super Admin account.' };
+      }
+      const now = Date.now();
+      db.prepare("UPDATE teachers_admins SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
+      writeAuditLog(currentUserId || 'unknown', 'DELETE_TEACHER', `Marked staff member "${existing ? existing.name : id}" as deleted`);
+      return { success: true };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
   });
 
   // Classes & Subjects
@@ -330,20 +479,29 @@ function registerIpcHandlers() {
 
   // Questions
   ipcMain.handle('db:get-questions', () => {
-    const questions = db.prepare("SELECT * FROM question_bank WHERE status = 'active'").all();
+    const questions = db.prepare("SELECT * FROM question_bank WHERE status != 'deleted'").all();
     return questions.map(q => ({
       ...q,
       options: JSON.parse(q.options_json)
     }));
   });
   ipcMain.handle('db:save-question', (event, q) => {
-    const { id, class: cls, subject, text, audioText, options, correct_answer, image_path } = q;
+    const { id, class: cls, subject, text, audioText, options, correct_answer, image_path, currentUserId, currentUserRole } = q;
     const now = Date.now();
     const idToUse = id || crypto.randomUUID();
     const optionsJson = JSON.stringify(options);
+
+    // Determine target approval status.
+    // If it's a new question or updated by a teacher, it goes to 'pending_approval'.
+    // Otherwise it is automatically 'approved'.
+    let approvalStatus = 'approved';
+    if (currentUserRole === 'teacher') {
+      approvalStatus = 'pending_approval';
+    }
+
     db.prepare(`
-      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, status, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
+      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, approval_status, status, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
       ON CONFLICT(id) DO UPDATE SET
         class = excluded.class,
         subject = excluded.subject,
@@ -352,41 +510,155 @@ function registerIpcHandlers() {
         options_json = excluded.options_json,
         correct_answer = excluded.correct_answer,
         image_path = excluded.image_path,
+        approval_status = excluded.approval_status,
         sync_status = 'pending',
         updated_at = excluded.updated_at
-    `).run(idToUse, cls, subject, text, audioText, optionsJson, correct_answer, image_path || null, now);
+    `).run(idToUse, cls, subject, text, audioText, optionsJson, correct_answer, image_path || null, approvalStatus, now);
+
+    // Determine version number
+    let versionNum = 1;
+    const maxVer = db.prepare("SELECT MAX(version_number) as max_ver FROM question_versions WHERE question_id = ?").get(idToUse);
+    if (maxVer && maxVer.max_ver) {
+      versionNum = maxVer.max_ver + 1;
+    }
+
+    // Insert version history
+    db.prepare(`
+      INSERT INTO question_versions (id, question_id, class, subject, text, audio_text, options_json, correct_answer, version_number, changed_by, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    `).run(crypto.randomUUID(), idToUse, cls, subject, text, audioText || '', optionsJson, correct_answer, versionNum, currentUserId || 'unknown', now);
+
+    writeAuditLog(currentUserId || 'unknown', 'SAVE_QUESTION', `Saved version ${versionNum} of question "${text.substring(0, 30)}..." (${approvalStatus})`);
     return { success: true, id: idToUse };
   });
-  ipcMain.handle('db:delete-question', (event, id) => {
+  ipcMain.handle('db:delete-question', (event, id, currentUserId, currentUserRole) => {
     const now = Date.now();
-    db.prepare("UPDATE question_bank SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
+    const existing = db.prepare("SELECT * FROM question_bank WHERE id = ?").get(id);
+    if (!existing) return { success: false, error: 'Question not found.' };
+
+    if (currentUserRole === 'owner') {
+      // Owner deletes permanently (by setting status to 'deleted')
+      db.prepare("UPDATE question_bank SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
+      writeAuditLog(currentUserId || 'unknown', 'DELETE_QUESTION', `Permanently deleted question: "${existing.text.substring(0, 30)}..."`);
+    } else {
+      // Other roles can only archive
+      db.prepare("UPDATE question_bank SET status = 'archived', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
+      writeAuditLog(currentUserId || 'unknown', 'ARCHIVE_QUESTION', `Archived question: "${existing.text.substring(0, 30)}..."`);
+    }
     return { success: true };
   });
-  ipcMain.handle('db:import-questions', (event, questions) => {
+  ipcMain.handle('db:import-questions', (event, questions, currentUserId) => {
     const now = Date.now();
     const insert = db.prepare(`
-      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, status, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
+      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, approval_status, status, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'active', 'pending', ?)
+    `);
+    const insertVersion = db.prepare(`
+      INSERT INTO question_versions (id, question_id, class, subject, text, audio_text, options_json, correct_answer, version_number, changed_by, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'pending', ?)
     `);
     
     const transaction = db.transaction((list) => {
       for (const q of list) {
+        const qId = q.id || crypto.randomUUID();
+        const optsJson = JSON.stringify(q.options);
         insert.run(
-          q.id || crypto.randomUUID(),
+          qId,
           q.class,
           q.subject,
           q.text,
           q.audioText || '',
-          JSON.stringify(q.options),
+          optsJson,
           q.correct,
           q.image_path || null,
+          now
+        );
+        insertVersion.run(
+          crypto.randomUUID(),
+          qId,
+          q.class,
+          q.subject,
+          q.text,
+          q.audioText || '',
+          optsJson,
+          q.correct,
+          currentUserId || 'unknown',
           now
         );
       }
     });
     
     transaction(questions);
+    writeAuditLog(currentUserId || 'unknown', 'IMPORT_QUESTIONS', `Imported ${questions.length} questions into Question Bank`);
     return { success: true };
+  });
+
+  ipcMain.handle('db:approve-question', (event, id, currentUserId) => {
+    try {
+      const now = Date.now();
+      const existing = db.prepare("SELECT * FROM question_bank WHERE id = ?").get(id);
+      db.prepare("UPDATE question_bank SET approval_status = 'approved', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
+      writeAuditLog(currentUserId || 'unknown', 'APPROVE_QUESTION', `Approved question: "${existing ? existing.text.substring(0, 30) : id}..."`);
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('db:archive-question', (event, id, currentUserId) => {
+    try {
+      const now = Date.now();
+      const existing = db.prepare("SELECT * FROM question_bank WHERE id = ?").get(id);
+      db.prepare("UPDATE question_bank SET status = 'archived', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
+      writeAuditLog(currentUserId || 'unknown', 'ARCHIVE_QUESTION', `Archived question: "${existing ? existing.text.substring(0, 30) : id}..."`);
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('db:get-question-versions', (event, questionId) => {
+    try {
+      return db.prepare("SELECT * FROM question_versions WHERE question_id = ? ORDER BY version_number DESC").all();
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:get-audit-logs', () => {
+    try {
+      return db.prepare("SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 500").all();
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:get-school-logo', () => {
+    try {
+      const row = db.prepare("SELECT value FROM settings WHERE key = 'school_logo'").get();
+      return row ? row.value : null;
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  });
+
+  ipcMain.handle('db:save-school-logo', (event, base64) => {
+    try {
+      db.prepare(`
+        INSERT INTO settings (key, value)
+        VALUES ('school_logo', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `).run(base64);
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
   });
 
   // Attendance
