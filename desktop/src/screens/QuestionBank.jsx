@@ -68,8 +68,8 @@ export const QuestionBank = () => {
         correct: q.correct_answer,
         audioText: q.audio_text || q.text,
         image_path: q.image_path,
-        is_approved: q.is_approved,
-        status: q.status || 'pending'
+        is_approved: q.approval_status === 'approved',
+        status: q.status === 'archived' ? 'archived' : (q.approval_status === 'pending_approval' ? 'pending' : 'approved')
       }));
       setQuestions(mapped);
     }
