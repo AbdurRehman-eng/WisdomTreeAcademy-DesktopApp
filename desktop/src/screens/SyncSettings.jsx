@@ -6,6 +6,7 @@ import { Database, RefreshCw, Radio, HardDrive, KeyRound, Cloud, Save } from 'lu
 
 export const SyncSettings = () => {
   const {
+    user,
     syncStatus,
     pendingSyncCount,
     triggerSync,
@@ -13,29 +14,115 @@ export const SyncSettings = () => {
     showToast,
     licenseKey,
     licenseActive,
-    validateLicense
+    validateLicense,
+    refreshSyncInfo,
+    schoolLogo
   } = useApp();
 
   const [newKey, setNewKey] = useState('');
 
-  // Cloud config state
-  const [cloudUrl,    setCloudUrl]    = useState('');
-  const [cloudApiKey, setCloudApiKey] = useState('');
-  const [savingCloud, setSavingCloud] = useState(false);
+  // Change Password state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
-  // Load cloud config on mount
-  useEffect(() => {
-    const loadConfig = async () => {
-      if (window.api?.getSyncConfig) {
-        const cfg = await window.api.getSyncConfig();
-        setCloudUrl(cfg.projectUrl || '');
-        setCloudApiKey(cfg.apiKey || '');
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      showToast('Please fill out all password fields.', 'error');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showToast('New passwords do not match.', 'error');
+      return;
+    }
+    if (newPassword.length < 6) {
+      showToast('New password must be at least 6 characters long.', 'error');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      if (window.api?.changePassword && user) {
+        const res = await window.api.changePassword(user.username, currentPassword, newPassword);
+        if (res.success) {
+          showToast('Password updated successfully! Local database and pending sync queue updated.', 'success');
+          setCurrentPassword('');
+          setNewPassword('');
+          setConfirmPassword('');
+        } else {
+          showToast(res.error || 'Failed to change password.', 'error');
+        }
+      } else {
+        showToast('Password change simulated (web preview mode).', 'info');
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
       }
-    };
-    loadConfig();
-  }, []);
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const handleBackupDatabase = async () => {
+    try {
+      if (window.api?.backupDatabase) {
+        const res = await window.api.backupDatabase();
+        if (res.success) {
+          showToast('Database backup saved successfully.', 'success');
+        } else if (res.error !== 'Cancelled') {
+          showToast(res.error || 'Failed to backup database.', 'error');
+        }
+      } else {
+        showToast('Database backup simulated (web preview mode).', 'info');
+      }
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+  };
+
+  const handleExportQuestions = async () => {
+    try {
+      if (window.api?.exportQuestions) {
+        const res = await window.api.exportQuestions();
+        if (res.success) {
+          showToast('Question Bank exported successfully.', 'success');
+        } else if (res.error !== 'Cancelled') {
+          showToast(res.error || 'Failed to export questions.', 'error');
+        }
+      } else {
+        showToast('Question Bank export simulated (web preview mode).', 'info');
+      }
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+  };
+
+  const handleExportResults = async () => {
+    try {
+      if (window.api?.exportResults) {
+        const res = await window.api.exportResults();
+        if (res.success) {
+          showToast('Student Results exported successfully.', 'success');
+        } else if (res.error !== 'Cancelled') {
+          showToast(res.error || 'Failed to export results.', 'error');
+        }
+      } else {
+        showToast('Student Results export simulated (web preview mode).', 'info');
+      }
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+  };
 
   const handleResetData = () => {
+    const confirmed = window.confirm(
+      "WARNING: This will reset the database cache, clear all offline records, and reload the application. This action CANNOT be undone. Are you absolutely sure you want to proceed?"
+    );
+    if (!confirmed) return;
+
     showToast('Resetting database defaults... Cache cleared.', 'success');
     window.location.reload();
   };
@@ -49,31 +136,6 @@ export const SyncSettings = () => {
     if (success) setNewKey('');
   };
 
-  const handleSaveCloudConfig = async () => {
-    if (!cloudUrl.trim()) {
-      showToast('Please enter your Supabase Project URL.', 'error');
-      return;
-    }
-    if (!cloudApiKey.trim()) {
-      showToast('Please enter your Supabase API key.', 'error');
-      return;
-    }
-    setSavingCloud(true);
-    try {
-      if (window.api?.setSyncConfig) {
-        const res = await window.api.setSyncConfig(cloudUrl.trim(), cloudApiKey.trim());
-        if (res.success) {
-          showToast('Cloud sync configuration saved successfully.', 'success');
-        } else {
-          showToast(res.error || 'Failed to save configuration.', 'error');
-        }
-      } else {
-        showToast('Cloud config saved (web preview mode — not persisted).', 'info');
-      }
-    } finally {
-      setSavingCloud(false);
-    }
-  };
 
   const inputStyle = {
     width: '100%',
@@ -123,7 +185,7 @@ export const SyncSettings = () => {
           </div>
 
           <div className="flex gap-sm" style={{ marginTop: 'auto' }}>
-            <Button variant="secondary" onClick={() => showToast('Database backup saved locally.', 'success')} style={{ flex: 1 }}>
+            <Button variant="secondary" onClick={handleBackupDatabase} style={{ flex: 1 }}>
               Backup DB
             </Button>
             <Button variant="secondary" onClick={handleResetData} style={{ flex: 1 }}>
@@ -175,55 +237,34 @@ export const SyncSettings = () => {
           </div>
         </div>
 
-        {/* Cloud Configuration Card — full width */}
+
+        {/* School Logo Card — full width */}
         <div className="card flex flex-col gap-md" style={{ gridColumn: 'span 2' }}>
-          <div className="flex items-center gap-sm" style={{ color: 'var(--color-success)' }}>
+          <div className="flex items-center gap-sm color-primary" style={{ color: 'var(--color-primary)' }}>
             <Cloud size={20} />
-            <h3 className="card-title" style={{ marginBottom: 0 }}>Cloud Sync Configuration (Supabase)</h3>
+            <h3 className="card-title" style={{ marginBottom: 0 }}>School Branding &amp; Custom Logo</h3>
           </div>
 
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-            Enter your <strong>Supabase project URL</strong> and <strong>anon API key</strong> to enable real cloud synchronization.
-            All pending local records will be pushed to your Supabase database when you trigger a sync.
-            See <code>docs/SYNC_GUIDE.md</code> for setup instructions.
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div className="flex flex-col gap-xs">
-              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                Supabase Project URL
-              </label>
-              <input
-                type="url"
-                placeholder="https://xxxxxxxxxxx.supabase.co"
-                value={cloudUrl}
-                onChange={e => setCloudUrl(e.target.value)}
-                style={inputStyle}
-              />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '16px', minHeight: '150px', background: 'var(--bg-secondary)' }}>
+              {schoolLogo ? (
+                <img src={schoolLogo} alt="School Logo Preview" style={{ maxWidth: '120px', maxHeight: '100px', objectFit: 'contain', marginBottom: '10px' }} />
+              ) : (
+                <div style={{ fontSize: '32px', marginBottom: '10px' }}>🌳</div>
+              )}
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {schoolLogo ? 'Custom Logo Active' : 'Default Logo Active'}
+              </span>
             </div>
-            <div className="flex flex-col gap-xs">
-              <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                Supabase Anon API Key
-              </label>
-              <input
-                type="password"
-                placeholder="eyJ... (anon key from Supabase project settings)"
-                value={cloudApiKey}
-                onChange={e => setCloudApiKey(e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-          </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button
-              variant="primary"
-              icon={Save}
-              onClick={handleSaveCloudConfig}
-              disabled={savingCloud}
-            >
-              {savingCloud ? 'Saving...' : 'Save Cloud Configuration'}
-            </Button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                Wisdom Tree Academy branding, application icons, and official school logos are managed centrally by the Super Administrator from the Owner Console. 
+              </p>
+              <div style={{ padding: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                <strong>Note:</strong> Whenever a cloud sync is executed, your local client will automatically pull and apply any new custom branding set in the owner dashboard.
+              </div>
+            </div>
           </div>
         </div>
 
@@ -274,6 +315,79 @@ export const SyncSettings = () => {
                 </Button>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Change Password Card — full width */}
+        <div className="card flex flex-col gap-md" style={{ gridColumn: 'span 2' }}>
+          <div className="flex items-center gap-sm color-accent" style={{ color: 'var(--color-accent)' }}>
+            <KeyRound size={20} />
+            <h3 className="card-title" style={{ marginBottom: 0 }}>Change Account Password</h3>
+          </div>
+
+          <form onSubmit={handleChangePassword} className="flex gap-md" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', alignItems: 'flex-end' }}>
+            <div className="flex flex-col gap-xs">
+              <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Current Password</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                style={inputStyle}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-xs">
+              <label style={{ fontSize: '12px', fontWeight: 'bold' }}>New Password</label>
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                style={inputStyle}
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-xs">
+              <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Confirm New Password</label>
+              <div className="flex gap-xs" style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  style={{ ...inputStyle, flex: 1 }}
+                  required
+                />
+                <Button variant="primary" type="submit" disabled={changingPassword} style={{ width: 'auto' }}>
+                  {changingPassword ? 'Updating...' : 'Update'}
+                </Button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        {/* Export & Backup Utilities Card — full width */}
+        <div className="card flex flex-col gap-md" style={{ gridColumn: 'span 2' }}>
+          <div className="flex items-center gap-sm color-primary" style={{ color: 'var(--color-primary)' }}>
+            <Database size={20} />
+            <h3 className="card-title" style={{ marginBottom: 0 }}>Data Export &amp; Backup Utilities</h3>
+          </div>
+
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+            Export your database records or create a full SQLite backup copy on your local system for record keeping.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+            <Button variant="secondary" onClick={handleBackupDatabase}>
+              Backup Local Database (.db)
+            </Button>
+            <Button variant="secondary" onClick={handleExportQuestions}>
+              Export Question Bank (.csv)
+            </Button>
+            <Button variant="secondary" onClick={handleExportResults}>
+              Export Student Results (.csv)
+            </Button>
           </div>
         </div>
       </div>

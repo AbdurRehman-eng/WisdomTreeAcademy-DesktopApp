@@ -9,8 +9,8 @@ import { Minus, Square, X, Monitor } from 'lucide-react';
 export const DesktopShell = ({ children }) => {
   const { user, activeScreen, syncStatus } = useApp();
 
-  // If the Owner Dashboard, Login, or Assessment Runner is active, we render in full viewport
-  const isFullViewport = activeScreen === 'login' || activeScreen === 'assessment-runner' || activeScreen === 'owner-dashboard';
+  // If the Login or Assessment Runner is active, we render in full viewport
+  const isFullViewport = activeScreen === 'login' || activeScreen === 'assessment-runner';
 
   return (
     <div className="desktop-app-frame">

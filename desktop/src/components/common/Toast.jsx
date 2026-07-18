@@ -4,7 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { CheckCircle2, AlertTriangle, AlertCircle, Info, X } from 'lucide-react';
 
 export const Toast = () => {
-  const { toasts } = useApp();
+  const { toasts, removeToast } = useApp();
 
   const getIcon = (type) => {
     switch (type) {
@@ -18,9 +18,18 @@ export const Toast = () => {
   return (
     <div className="toast-container">
       {toasts.map((toast) => (
-        <div key={toast.id} className={`toast-card toast-${toast.type} fade-in`}>
-          {getIcon(toast.type)}
-          <span className="toast-message">{toast.message}</span>
+        <div key={toast.id} className={`toast-card toast-${toast.type} fade-in`} style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {getIcon(toast.type)}
+            <span className="toast-message">{toast.message}</span>
+          </div>
+          <button
+            onClick={() => removeToast(toast.id)}
+            style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center', opacity: 0.7 }}
+            title="Dismiss notification"
+          >
+            <X size={14} />
+          </button>
         </div>
       ))}
     </div>

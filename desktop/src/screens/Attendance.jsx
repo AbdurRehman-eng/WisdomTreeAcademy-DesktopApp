@@ -118,18 +118,24 @@ export const Attendance = () => {
       <div className="attendance-grid-layout">
         {/* Left Side: Student Registry List */}
         <div className="card registry-card">
-          <div className="registry-header-row">
-            {/* Grade Switcher */}
-            <div className="grade-selector-tabs">
-              {classes.map(cls => (
-                <button
-                  key={cls.id}
-                  onClick={() => setSelectedGrade(cls.name)}
-                  className={`grade-tab-btn ${selectedGrade === cls.name ? 'active' : ''}`}
-                >
-                  {cls.name}
-                </button>
-              ))}
+          <div className="registry-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+            {/* Grade Switcher Dropdown */}
+            <div className="grade-selector-dropdown-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className="font-semibold text-sm" style={{ color: 'var(--text-secondary)', fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap' }}>
+                Classroom:
+              </span>
+              <select
+                className="form-select"
+                value={selectedGrade}
+                onChange={(e) => setSelectedGrade(e.target.value)}
+                style={{ width: '180px', padding: '6px 12px', borderRadius: 'var(--radius-md)', fontSize: '13px' }}
+              >
+                {classes.map(cls => (
+                  <option key={cls.id} value={cls.name}>
+                    {cls.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <Button variant="primary" onClick={handleSaveAttendance} icon={Save}>
