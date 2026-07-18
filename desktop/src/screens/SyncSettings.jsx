@@ -15,10 +15,35 @@ export const SyncSettings = () => {
     licenseKey,
     licenseActive,
     validateLicense,
-    refreshSyncInfo
+    refreshSyncInfo,
+    schoolLogo,
+    updateSchoolLogo
   } = useApp();
 
   const [newKey, setNewKey] = useState('');
+
+  const handleLogoUploadClick = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/png, image/jpeg, image/jpg';
+    input.onchange = (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const base64 = evt.target.result;
+        await updateSchoolLogo(base64);
+      };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  };
+
+  const handleRemoveLogo = async () => {
+    if (confirm('Are you sure you want to remove the custom school logo and revert to default branding?')) {
+      await updateSchoolLogo('');
+    }
+  };
 
   // Change Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -236,6 +261,43 @@ export const SyncSettings = () => {
           </div>
         </div>
 
+
+        {/* School Logo Card — full width */}
+        <div className="card flex flex-col gap-md" style={{ gridColumn: 'span 2' }}>
+          <div className="flex items-center gap-sm color-primary" style={{ color: 'var(--color-primary)' }}>
+            <Cloud size={20} />
+            <h3 className="card-title" style={{ marginBottom: 0 }}>School Branding &amp; Custom Logo</h3>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '16px', minHeight: '150px', background: 'var(--bg-secondary)' }}>
+              {schoolLogo ? (
+                <img src={schoolLogo} alt="School Logo Preview" style={{ maxWidth: '120px', maxHeight: '100px', objectFit: 'contain', marginBottom: '10px' }} />
+              ) : (
+                <div style={{ fontSize: '32px', marginBottom: '10px' }}>🌳</div>
+              )}
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                {schoolLogo ? 'Custom Logo Active' : 'Default Logo Active'}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                Personalize Wisdom Tree Academy with your school's official crest or logo. The image is rendered dynamically on the Sign In screen, navigation panel, and printable academic reports.
+              </p>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <Button variant="primary" onClick={handleLogoUploadClick}>
+                  Upload Custom Logo
+                </Button>
+                {schoolLogo && (
+                  <Button variant="secondary" onClick={handleRemoveLogo} style={{ color: 'var(--color-error, #ef4444)' }}>
+                    Revert to Default
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Licensing Card — full width */}
         <div className="card flex flex-col gap-md" style={{ gridColumn: 'span 2' }}>
