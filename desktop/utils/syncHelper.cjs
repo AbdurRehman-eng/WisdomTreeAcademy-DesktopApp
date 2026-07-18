@@ -112,6 +112,51 @@ function supabaseUpsert(endpoint, apiKey, rows) {
   });
 }
 
+function supabaseGetSetting(baseUrl, apiKey, key) {
+  return new Promise((resolve) => {
+    const queryUrl = `${baseUrl}/rest/v1/settings?key=eq.${key}&select=value`;
+    const parsed = url.parse(queryUrl);
+
+    const options = {
+      hostname: parsed.hostname,
+      path:     parsed.path,
+      method:   'GET',
+      headers: {
+        'apikey':         apiKey,
+        'Authorization':  `Bearer ${apiKey}`
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            const rows = JSON.parse(body);
+            resolve({ ok: true, value: rows.length > 0 ? rows[0].value : null });
+          } catch (e) {
+            resolve({ ok: false, value: null, error: 'JSON parse error' });
+          }
+        } else {
+          resolve({ ok: false, value: null, error: `HTTP ${res.statusCode}` });
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      resolve({ ok: false, value: null, error: err.message });
+    });
+
+    req.setTimeout(10000, () => {
+      req.destroy();
+      resolve({ ok: false, value: null, error: 'Timed out' });
+    });
+
+    req.end();
+  });
+}
+
 const TABLES_CONFIG = [
   {
     localTable:    'students',
@@ -320,6 +365,24 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
       errors.push(errMsg);
       console.error('[syncHelper] Unexpected error:', errMsg);
     }
+  }
+
+  // 3. Pull School Branding / Logo phase
+  try {
+    const logoResult = await supabaseGetSetting(baseUrl, apiKey, 'school_logo');
+    if (logoResult.ok) {
+      if (logoResult.value !== undefined) {
+        db.prepare(`
+          INSERT INTO settings (key, value)
+          VALUES ('school_logo', ?)
+          ON CONFLICT(key) DO UPDATE SET value = excluded.value
+        `).run(logoResult.value || '');
+      }
+    } else {
+      console.warn('[syncHelper] Settings table logo fetch failed or table not initialized:', logoResult.error);
+    }
+  } catch (err) {
+    console.error('[syncHelper] Error pulling logo setting:', err);
   }
 
   // Log the sync attempt

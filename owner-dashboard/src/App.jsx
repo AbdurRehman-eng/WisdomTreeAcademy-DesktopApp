@@ -204,6 +204,8 @@ export default function App() {
   const [attendance, setAttendance] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [loadingData, setLoadingData] = useState(false);
+  const [schoolLogo, setSchoolLogo] = useState(null);
+  const [isSavingLogo, setIsSavingLogo] = useState(false);
 
   // Search/Filters
   const [studentSearch, setStudentSearch] = useState('');
@@ -356,11 +358,45 @@ export default function App() {
       } catch (err) {
         console.warn('Failed to load audit logs:', err);
       }
+
+      // Gracefully fetch school logo if the settings table exists
+      try {
+        const { data: resSettings, error: resSettingsErr } = await client
+          .from('settings')
+          .select('*')
+          .eq('key', 'school_logo');
+        if (!resSettingsErr && resSettings && resSettings.length > 0) {
+          setSchoolLogo(resSettings[0].value);
+        } else {
+          setSchoolLogo(null);
+        }
+      } catch (err) {
+        console.warn('Failed to load school logo setting:', err);
+      }
     } catch (e) {
       console.error('Failed to load data:', e);
       throw e;
     } finally {
       setLoadingData(false);
+    }
+  };
+
+  const handleUpdateLogo = async (base64) => {
+    setIsSavingLogo(true);
+    try {
+      const client = createClient(supabaseUrl, supabaseKey);
+      const { error } = await client
+        .from('settings')
+        .upsert({ key: 'school_logo', value: base64 });
+      if (error) throw error;
+      setSchoolLogo(base64 || null);
+      logAuditEvent(client, loginUsername || 'superadmin', 'change_logo', 'School logo changed from owner dashboard console.');
+      alert('School logo branding updated successfully!');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update school logo: ' + e.message);
+    } finally {
+      setIsSavingLogo(false);
     }
   };
 
@@ -2149,47 +2185,114 @@ export default function App() {
 
         {/* CONSOLE PROFILE TAB */}
         {activeTab === 'profile' && (
-          <div className="card fade-in" style={{ maxWidth: '500px', margin: '0 auto' }}>
-            <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Lock size={20} className="color-primary" />
-              Console Security Profile
-            </h3>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
-              Update the administrative login credentials for this owner console. These credentials are saved securely in your local browser cache.
-            </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '500px', margin: '0 auto' }}>
+            <div className="card fade-in">
+              <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Lock size={20} className="color-primary" />
+                Console Security Profile
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
+                Update the administrative login credentials for this owner console. These credentials are saved securely in your local browser cache.
+              </p>
 
-            <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 'bold' }}>Console Username</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={profileUsername}
-                  onChange={e => setProfileUsername(e.target.value)}
-                  required
-                />
+              <form onSubmit={handleUpdateProfile} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 'bold' }}>Console Username</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={profileUsername}
+                    onChange={e => setProfileUsername(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 'bold' }}>Console Password</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    placeholder="Enter new password"
+                    value={profilePassword}
+                    onChange={e => setProfilePassword(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ width: '100%', padding: '12px', fontWeight: 600, marginTop: '8px' }}
+                >
+                  Save Profile Changes
+                </button>
+              </form>
+            </div>
+
+            <div className="card fade-in">
+              <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                🌳 App Branding &amp; Custom Logo
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
+                Upload the school logo to personalize the application icon and branding for all branch schools and offline desktop client applications.
+              </p>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '16px', minHeight: '120px', background: 'var(--bg-app)' }}>
+                  {schoolLogo ? (
+                    <img src={schoolLogo} alt="Logo Preview" style={{ maxWidth: '100px', maxHeight: '80px', objectFit: 'contain' }} />
+                  ) : (
+                    <div style={{ fontSize: '32px' }}>🌳</div>
+                  )}
+                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '8px' }}>
+                    {schoolLogo ? 'Custom Logo' : 'Default Logo'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <input
+                    type="file"
+                    accept="image/png, image/jpeg, image/jpg"
+                    style={{ display: 'none' }}
+                    id="owner-logo-upload"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = async (evt) => {
+                        await handleUpdateLogo(evt.target.result);
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={() => document.getElementById('owner-logo-upload').click()}
+                      disabled={isSavingLogo}
+                    >
+                      {isSavingLogo ? 'Saving...' : 'Upload Logo'}
+                    </button>
+                    {schoolLogo && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={async () => {
+                          if (confirm('Are you sure you want to revert to default branding?')) {
+                            await handleUpdateLogo('');
+                          }
+                        }}
+                        disabled={isSavingLogo}
+                        style={{ color: 'var(--color-error)' }}
+                      >
+                        Revert
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-
-              <div className="form-group">
-                <label className="form-label" style={{ fontWeight: 'bold' }}>Console Password</label>
-                <input
-                  type="password"
-                  className="form-input"
-                  placeholder="Enter new password"
-                  value={profilePassword}
-                  onChange={e => setProfilePassword(e.target.value)}
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="btn btn-primary"
-                style={{ width: '100%', padding: '12px', fontWeight: 600, marginTop: '8px' }}
-              >
-                Save Profile Changes
-              </button>
-            </form>
+            </div>
           </div>
         )}
       </main>

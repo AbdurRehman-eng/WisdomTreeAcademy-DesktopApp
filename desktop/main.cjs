@@ -648,17 +648,7 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('db:save-school-logo', (event, base64) => {
-    try {
-      db.prepare(`
-        INSERT INTO settings (key, value)
-        VALUES ('school_logo', ?)
-        ON CONFLICT(key) DO UPDATE SET value = excluded.value
-      `).run(base64);
-      return { success: true };
-    } catch (e) {
-      console.error(e);
-      return { success: false, error: e.message };
-    }
+    return { success: false, error: 'App icon branding updates are restricted. Only the Super Administrator can change the app icon from the Owner Console.' };
   });
 
   // Attendance

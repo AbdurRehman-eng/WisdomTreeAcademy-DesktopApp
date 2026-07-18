@@ -16,34 +16,10 @@ export const SyncSettings = () => {
     licenseActive,
     validateLicense,
     refreshSyncInfo,
-    schoolLogo,
-    updateSchoolLogo
+    schoolLogo
   } = useApp();
 
   const [newKey, setNewKey] = useState('');
-
-  const handleLogoUploadClick = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/png, image/jpeg, image/jpg';
-    input.onchange = (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async (evt) => {
-        const base64 = evt.target.result;
-        await updateSchoolLogo(base64);
-      };
-      reader.readAsDataURL(file);
-    };
-    input.click();
-  };
-
-  const handleRemoveLogo = async () => {
-    if (confirm('Are you sure you want to remove the custom school logo and revert to default branding?')) {
-      await updateSchoolLogo('');
-    }
-  };
 
   // Change Password state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -283,17 +259,10 @@ export const SyncSettings = () => {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-                Personalize Wisdom Tree Academy with your school's official crest or logo. The image is rendered dynamically on the Sign In screen, navigation panel, and printable academic reports.
+                Wisdom Tree Academy branding, application icons, and official school logos are managed centrally by the Super Administrator from the Owner Console. 
               </p>
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <Button variant="primary" onClick={handleLogoUploadClick}>
-                  Upload Custom Logo
-                </Button>
-                {schoolLogo && (
-                  <Button variant="secondary" onClick={handleRemoveLogo} style={{ color: 'var(--color-error, #ef4444)' }}>
-                    Revert to Default
-                  </Button>
-                )}
+              <div style={{ padding: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                <strong>Note:</strong> Whenever a cloud sync is executed, your local client will automatically pull and apply any new custom branding set in the owner dashboard.
               </div>
             </div>
           </div>

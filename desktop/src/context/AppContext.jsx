@@ -153,6 +153,7 @@ export const AppProvider = ({ children }) => {
       if (res.success) {
         showToast('Sync completed! Offline database is fully up to date.', 'success');
         setSyncConflicts([]);
+        loadSchoolLogo();
       } else if (res.hasConflicts) {
         showToast('Sync paused. Conflicts detected between local and cloud databases.', 'warning');
         setSyncConflicts(res.conflicts);
