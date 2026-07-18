@@ -7,12 +7,11 @@ import './Reports.css';
 
 function getPerformanceBand(percent) {
   if (percent >= 90) return { label: 'Exceeded Expectations', css: 'exceeded', icon: '🏆' };
-  if (percent >= 60) return { label: 'Met Expectations',      css: 'met',      icon: '⭐' };
   return               { label: 'Below Expectations',         css: 'below',    icon: '📌' };
 }
 
 export const Reports = () => {
-  const { showToast } = useApp();
+  const { showToast, schoolLogo } = useApp();
   const printAreaRef = useRef(null);
 
   const [assessments, setAssessments]   = useState([]);
@@ -58,13 +57,19 @@ export const Reports = () => {
     const pct  = Math.round((item.score / item.total_questions) * 100);
     const band = getPerformanceBand(pct);
     const results = Array.isArray(item.results) ? item.results : [];
+    const logoHtml = schoolLogo 
+      ? `<img src="${schoolLogo}" style="max-height: 48px; object-fit: contain; margin-right: 12px; border-radius: 4px;" alt="Logo" />`
+      : `<span style="font-size: 28px; margin-right: 12px;">🌳</span>`;
 
     return `
       <div class="report-page" style="page-break-after: always;">
-        <div class="report-header">
-          <div>
-            <div class="report-school-name">🌳 Wisdom Tree Academy</div>
-            <div class="report-school-tag">Diagnostic Assessment Software v1.0 — Official Transcript</div>
+        <div class="report-header" style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center;">
+            ${logoHtml}
+            <div>
+              <div class="report-school-name">Wisdom Tree Academy</div>
+              <div class="report-school-tag">Diagnostic Assessment Software v1.0 — Official Transcript</div>
+            </div>
           </div>
           <span class="report-badge">OFFICIAL REPORT</span>
         </div>
