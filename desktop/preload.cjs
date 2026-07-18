@@ -14,7 +14,7 @@ contextBridge.exposeInMainWorld('api', {
   // Teachers / Admins
   getTeachers: () => ipcRenderer.invoke('db:get-teachers'),
   saveTeacher: (teacher) => ipcRenderer.invoke('db:save-teacher', teacher),
-  deleteTeacher: (id) => ipcRenderer.invoke('db:delete-teacher', id),
+  deleteTeacher: (id, currentUserId) => ipcRenderer.invoke('db:delete-teacher', id, currentUserId),
   
   // Classes / Subjects
   getClasses: () => ipcRenderer.invoke('db:get-classes'),
@@ -29,8 +29,14 @@ contextBridge.exposeInMainWorld('api', {
   // Question Bank
   getQuestions: () => ipcRenderer.invoke('db:get-questions'),
   saveQuestion: (question) => ipcRenderer.invoke('db:save-question', question),
-  deleteQuestion: (id) => ipcRenderer.invoke('db:delete-question', id),
-  importQuestions: (questions) => ipcRenderer.invoke('db:import-questions', questions),
+  deleteQuestion: (id, currentUserId, currentUserRole) => ipcRenderer.invoke('db:delete-question', id, currentUserId, currentUserRole),
+  importQuestions: (questions, currentUserId) => ipcRenderer.invoke('db:import-questions', questions, currentUserId),
+  approveQuestion: (id, currentUserId) => ipcRenderer.invoke('db:approve-question', id, currentUserId),
+  archiveQuestion: (id, currentUserId) => ipcRenderer.invoke('db:archive-question', id, currentUserId),
+  getQuestionVersions: (questionId) => ipcRenderer.invoke('db:get-question-versions', questionId),
+  getAuditLogs: () => ipcRenderer.invoke('db:get-audit-logs'),
+  getSchoolLogo: () => ipcRenderer.invoke('db:get-school-logo'),
+  saveSchoolLogo: (base64) => ipcRenderer.invoke('db:save-school-logo', base64),
 
   // Attendance
   getAttendance: (date, type) => ipcRenderer.invoke('db:get-attendance', date, type),

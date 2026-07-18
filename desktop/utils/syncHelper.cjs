@@ -123,9 +123,23 @@ const TABLES_CONFIG = [
   {
     localTable:    'teachers_admins',
     remoteTable:   'teachers_admins',
-    selectQuery:   "SELECT id, username, role, name, email, status, updated_at FROM teachers_admins WHERE sync_status = 'pending'",
+    selectQuery:   "SELECT id, username, role, name, email, phone_number, employee_id, hire_date, assigned_classes_json, assigned_subjects_json, last_login, status, updated_at FROM teachers_admins WHERE sync_status = 'pending'",
     markSynced:    "UPDATE teachers_admins SET sync_status = 'synced' WHERE sync_status = 'pending'",
-    mapRow:        (r) => ({ id: r.id, username: r.username, role: r.role, name: r.name, email: r.email, status: r.status, updated_at: r.updated_at })
+    mapRow:        (r) => ({
+      id: r.id,
+      username: r.username,
+      role: r.role,
+      name: r.name,
+      email: r.email,
+      phone_number: r.phone_number,
+      employee_id: r.employee_id,
+      hire_date: r.hire_date,
+      assigned_classes_json: r.assigned_classes_json,
+      assigned_subjects_json: r.assigned_subjects_json,
+      last_login: r.last_login,
+      status: r.status,
+      updated_at: r.updated_at
+    })
   },
   {
     localTable:    'classes',
@@ -144,9 +158,9 @@ const TABLES_CONFIG = [
   {
     localTable:    'question_bank',
     remoteTable:   'question_bank',
-    selectQuery:   "SELECT id, class, subject, text, audio_text, options_json, correct_answer, image_path, status, updated_at FROM question_bank WHERE sync_status = 'pending'",
+    selectQuery:   "SELECT id, class, subject, text, audio_text, options_json, correct_answer, image_path, approval_status, status, updated_at FROM question_bank WHERE sync_status = 'pending'",
     markSynced:    "UPDATE question_bank SET sync_status = 'synced' WHERE sync_status = 'pending'",
-    mapRow:        (r) => ({ id: r.id, class: r.class, subject: r.subject, text: r.text, audio_text: r.audio_text, options_json: r.options_json, correct_answer: r.correct_answer, image_path: r.image_path, status: r.status, updated_at: r.updated_at })
+    mapRow:        (r) => ({ id: r.id, class: r.class, subject: r.subject, text: r.text, audio_text: r.audio_text, options_json: r.options_json, correct_answer: r.correct_answer, image_path: r.image_path, approval_status: r.approval_status, status: r.status, updated_at: r.updated_at })
   },
   {
     localTable:    'assessments',
@@ -161,6 +175,20 @@ const TABLES_CONFIG = [
     selectQuery:   "SELECT id, type, target_id, date, status, updated_at FROM attendance WHERE sync_status = 'pending'",
     markSynced:    "UPDATE attendance SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, type: r.type, target_id: r.target_id, date: r.date, status: r.status, updated_at: r.updated_at })
+  },
+  {
+    localTable:    'audit_logs',
+    remoteTable:   'audit_logs',
+    selectQuery:   "SELECT id, user_id, action, details, timestamp FROM audit_logs WHERE sync_status = 'pending'",
+    markSynced:    "UPDATE audit_logs SET sync_status = 'synced' WHERE sync_status = 'pending'",
+    mapRow:        (r) => ({ id: r.id, user_id: r.user_id, action: r.action, details: r.details, timestamp: r.timestamp })
+  },
+  {
+    localTable:    'question_versions',
+    remoteTable:   'question_versions',
+    selectQuery:   "SELECT id, question_id, class, subject, text, audio_text, options_json, correct_answer, version_number, changed_by, updated_at FROM question_versions WHERE sync_status = 'pending'",
+    markSynced:    "UPDATE question_versions SET sync_status = 'synced' WHERE sync_status = 'pending'",
+    mapRow:        (r) => ({ id: r.id, question_id: r.question_id, class: r.class, subject: r.subject, text: r.text, audio_text: r.audio_text, options_json: r.options_json, correct_answer: r.correct_answer, version_number: r.version_number, changed_by: r.changed_by, updated_at: r.updated_at })
   }
 ];
 
@@ -176,6 +204,12 @@ function getRowDisplayName(table, row) {
   }
   if (table === 'attendance') {
     return `Attendance Roll (Date: ${row.date})`;
+  }
+  if (table === 'audit_logs') {
+    return `Audit: ${row.action} - ${row.details}`;
+  }
+  if (table === 'question_versions') {
+    return `Question Version ${row.version_number}`;
   }
   return row.id;
 }
