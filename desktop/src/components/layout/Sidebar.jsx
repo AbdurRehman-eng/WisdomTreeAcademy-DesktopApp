@@ -20,24 +20,24 @@ import {
 } from 'lucide-react';
 
 export const Sidebar = () => {
-  const { user, activeScreen, setScreen, logout } = useApp();
+  const { user, activeScreen, setScreen, logout, schoolLogo } = useApp();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   if (!user) return null;
 
   // Sidebar configuration items
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['admin', 'teacher'] },
-    { id: 'students', label: 'Students', icon: Users, roles: ['admin', 'teacher'] },
-    { id: 'teachers-admins', label: 'Teachers & Admins', icon: ShieldCheck, roles: ['admin'] },
-    { id: 'classes-subjects', label: 'Classes & Subjects', icon: School, roles: ['admin'] },
-    { id: 'question-bank', label: 'Question Bank', icon: Database, roles: ['admin', 'teacher'] },
-    { id: 'assessment-setup', label: 'Assessment Setup', icon: ClipboardList, roles: ['admin', 'teacher'] },
-    { id: 'assessment-runner', label: 'Assessment Runner', icon: PlayCircle, roles: ['admin', 'teacher'] },
-    { id: 'assessment-results', label: 'Assessment Results', icon: BarChart3, roles: ['admin', 'teacher'] },
-    { id: 'attendance', label: 'Attendance', icon: CalendarDays, roles: ['admin', 'teacher'] },
-    { id: 'reports', label: 'Reports Center', icon: FileText, roles: ['admin', 'teacher'] },
-    { id: 'sync-settings', label: 'Sync & Settings', icon: Sliders, roles: ['admin'] }
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['owner', 'admin', 'it_administrator', 'head_teacher', 'accountant', 'secretary', 'teacher'] },
+    { id: 'students', label: 'Students', icon: Users, roles: ['owner', 'admin', 'head_teacher', 'secretary', 'teacher'] },
+    { id: 'teachers-admins', label: 'Staff Registry', icon: ShieldCheck, roles: ['owner', 'admin', 'it_administrator', 'head_teacher'] },
+    { id: 'classes-subjects', label: 'Classes & Subjects', icon: School, roles: ['owner', 'admin', 'it_administrator', 'head_teacher'] },
+    { id: 'question-bank', label: 'Question Bank', icon: Database, roles: ['owner', 'admin', 'head_teacher', 'teacher'] },
+    { id: 'assessment-setup', label: 'Assessment Setup', icon: ClipboardList, roles: ['owner', 'admin', 'head_teacher', 'teacher'] },
+    { id: 'assessment-runner', label: 'Assessment Runner', icon: PlayCircle, roles: ['owner', 'admin', 'head_teacher', 'teacher'] },
+    { id: 'assessment-results', label: 'Assessment Results', icon: BarChart3, roles: ['owner', 'admin', 'head_teacher', 'teacher'] },
+    { id: 'attendance', label: 'Attendance', icon: CalendarDays, roles: ['owner', 'admin', 'head_teacher', 'secretary', 'teacher'] },
+    { id: 'reports', label: 'Reports Center', icon: FileText, roles: ['owner', 'admin', 'head_teacher', 'accountant', 'secretary', 'teacher'] },
+    { id: 'sync-settings', label: 'Sync & Settings', icon: Sliders, roles: ['owner', 'admin', 'it_administrator'] }
   ];
 
   // Filter items based on user role
@@ -47,7 +47,13 @@ export const Sidebar = () => {
     <div className={`app-sidebar ${isCollapsed ? 'collapsed' : ''}`}>
       {/* Brand Header */}
       <div className="sidebar-brand">
-        <div className="brand-logo">🌳</div>
+        <div className="brand-logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          {schoolLogo ? (
+            <img src={schoolLogo} alt="Logo" className="sidebar-custom-logo" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: 'inherit' }} />
+          ) : (
+            "🌳"
+          )}
+        </div>
         {!isCollapsed && <span className="brand-text">Wisdom Tree</span>}
       </div>
 

@@ -13,6 +13,7 @@ export const AppProvider = ({ children }) => {
   const [licenseActive, setLicenseActive] = useState(false);
   const [activeAssessment, setActiveAssessment] = useState(null);
   const [isPhysicalOffline, setIsPhysicalOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
+  const [schoolLogo, setSchoolLogo] = useState(null);
 
   const syncStatusRef = useRef(syncStatus);
   useEffect(() => {
@@ -31,7 +32,30 @@ export const AppProvider = ({ children }) => {
     // Load license and sync states
     refreshLicenseInfo();
     refreshSyncInfo();
+    loadSchoolLogo();
   }, []);
+
+  const loadSchoolLogo = async () => {
+    if (window.api) {
+      const logo = await window.api.getSchoolLogo();
+      setSchoolLogo(logo);
+    }
+  };
+
+  const updateSchoolLogo = async (base64) => {
+    if (window.api) {
+      const res = await window.api.saveSchoolLogo(base64);
+      if (res.success) {
+        setSchoolLogo(base64);
+        showToast('School logo updated successfully!', 'success');
+        return true;
+      } else {
+        showToast(res.error || 'Failed to save logo.', 'error');
+        return false;
+      }
+    }
+    return false;
+  };
 
   const refreshLicenseInfo = async () => {
     if (window.api) {
@@ -232,7 +256,9 @@ export const AppProvider = ({ children }) => {
       validateLicense,
       refreshLicenseInfo,
       activeAssessment,
-      setActiveAssessment
+      setActiveAssessment,
+      schoolLogo,
+      updateSchoolLogo
     }}>
       {children}
     </AppContext.Provider>
