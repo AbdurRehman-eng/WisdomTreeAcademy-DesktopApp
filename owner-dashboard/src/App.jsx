@@ -934,7 +934,11 @@ export default function App() {
       <div className="conn-overlay">
         <div className="card conn-card" style={{ maxWidth: '400px', width: '100%' }}>
           <div className="text-center flex flex-col gap-sm items-center">
-            <span style={{ fontSize: '40px' }}>🌳</span>
+            {schoolLogo ? (
+              <img src={schoolLogo} alt="School Logo" style={{ maxWidth: '120px', maxHeight: '100px', objectFit: 'contain', marginBottom: '8px' }} />
+            ) : (
+              <span style={{ fontSize: '40px' }}>🌳</span>
+            )}
             <h1 style={{ fontSize: '24px', margin: '8px 0' }} className="brand-title">Wisdom Tree Academy</h1>
             <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', fontWeight: 500 }}>
               Owner Console Authorization
@@ -1066,7 +1070,11 @@ export default function App() {
       {/* Sidebar Nav */}
       <aside className="sidebar">
         <div className="brand-section">
-          <span className="brand-logo">🌳</span>
+          {schoolLogo ? (
+            <img src={schoolLogo} alt="School Logo" style={{ width: '40px', height: '40px', objectFit: 'contain', borderRadius: '4px' }} />
+          ) : (
+            <span className="brand-logo">🌳</span>
+          )}
           <div>
             <h1 className="brand-title">Wisdom Tree</h1>
             <p className="brand-subtitle">Owner Console</p>
