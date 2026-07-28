@@ -948,6 +948,40 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('sync:resolve-conflicts', async (event, conflicts) => {
+    try {
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'syncing')").run();
+
+      const urlRow = db.prepare("SELECT value FROM settings WHERE key = 'sync_endpoint'").get();
+      const keyRow = db.prepare("SELECT value FROM settings WHERE key = 'sync_api_key'").get();
+      const projectUrl = urlRow ? urlRow.value : '';
+      const apiKey     = keyRow ? keyRow.value : '';
+
+      const { resolveConflictsWithCloud, pushPendingRecords } = require('./utils/syncHelper.cjs');
+      const res = await resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts);
+
+      if (res.success) {
+        // Re-trigger sync immediately to flush the remaining pending records
+        const syncRes = await pushPendingRecords(db, projectUrl, apiKey, false);
+        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+
+        if (syncRes.success) {
+          return { success: true, syncedCount: syncRes.syncedCount };
+        } else if (syncRes.hasConflicts) {
+          return { success: false, hasConflicts: true, conflicts: syncRes.conflicts };
+        } else {
+          return { success: false, error: syncRes.errors.join('; '), syncedCount: syncRes.syncedCount };
+        }
+      } else {
+        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+        return { success: false, error: res.error };
+      }
+    } catch (e) {
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'offline')").run();
+      return { success: false, error: e.message };
+    }
+  });
+
   // Sync configuration IPC
   ipcMain.handle('sync:set-config', (event, projectUrl, apiKey) => {
     try {

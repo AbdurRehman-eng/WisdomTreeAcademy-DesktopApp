@@ -35,7 +35,7 @@ const screenRoles = {
 };
 
 function MainAppContent() {
-  const { user, activeScreen, syncConflicts, setSyncConflicts, triggerSync, showToast } = useApp();
+  const { user, activeScreen, syncConflicts, setSyncConflicts, triggerSync, showToast, refreshSyncInfo } = useApp();
 
   const handleOverwrite = async () => {
     if (confirm('Are you absolutely sure you want to force sync and overwrite the cloud database versions for these records?')) {
@@ -44,9 +44,23 @@ function MainAppContent() {
     }
   };
 
-  const handleKeepCloud = () => {
+  const handleKeepCloud = async () => {
+    showToast('Resolving conflicts and completing database sync...', 'info');
+    const conflictsToResolve = [...syncConflicts];
     setSyncConflicts([]);
-    showToast('Sync cancelled. Keeping cloud versions.', 'info');
+
+    if (window.api) {
+      const res = await window.api.resolveConflicts(conflictsToResolve);
+      if (res.success) {
+        showToast(`Sync completed successfully! Pushed pending records.`, 'success');
+      } else if (res.hasConflicts) {
+        showToast('Remaining conflicts detected.', 'warning');
+        setSyncConflicts(res.conflicts);
+      } else {
+        showToast(res.error || 'Failed to complete synchronization.', 'error');
+      }
+      refreshSyncInfo();
+    }
   };
 
   // If no user is logged in, show the Login screen

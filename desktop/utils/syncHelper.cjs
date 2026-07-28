@@ -419,4 +419,43 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
   };
 }
 
-module.exports = { pushPendingRecords };
+/**
+ * Resolve conflicts by keeping cloud version of the specified records.
+ */
+async function resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts) {
+  if (!projectUrl || !apiKey || !conflicts || conflicts.length === 0) {
+    return { success: true };
+  }
+
+  const baseUrl = projectUrl.replace(/\/$/, '');
+
+  for (const conflict of conflicts) {
+    const cfg = TABLES_CONFIG.find(c => c.localTable === conflict.table);
+    if (!cfg) continue;
+
+    try {
+      const endpoint = `${baseUrl}/rest/v1/${cfg.remoteTable}`;
+      const result = await supabaseGet(endpoint, apiKey, [conflict.id]);
+
+      if (result.ok && result.rows && result.rows.length > 0) {
+        const remoteRow = result.rows[0];
+        const mappedRemote = cfg.mapRow(remoteRow);
+
+        const keys = Object.keys(mappedRemote);
+        const columns = [...keys, 'sync_status'];
+        const placeholders = columns.map(() => '?').join(', ');
+        const values = [...keys.map(k => mappedRemote[k]), 'synced'];
+
+        const sql = `INSERT OR REPLACE INTO ${cfg.localTable} (${columns.join(', ')}) VALUES (${placeholders})`;
+        db.prepare(sql).run(...values);
+      }
+    } catch (err) {
+      console.error(`[syncHelper] Error resolving conflict for ${conflict.table} ID ${conflict.id}:`, err);
+      return { success: false, error: err.message };
+    }
+  }
+
+  return { success: true };
+}
+
+module.exports = { pushPendingRecords, resolveConflictsWithCloud, supabaseGet };
