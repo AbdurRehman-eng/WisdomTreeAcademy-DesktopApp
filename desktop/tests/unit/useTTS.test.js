@@ -146,4 +146,16 @@ describe('useTTS', () => {
       act(() => { result.current.replay(); });
     }).not.toThrow();
   });
+
+  it('exposes voiceType and changes it successfully via changeVoiceType', () => {
+    const { result } = renderHook(() => useTTS('Hello'));
+    expect(result.current.voiceType).toBe('friendly-female'); // default
+
+    act(() => {
+      result.current.changeVoiceType('warm-male');
+    });
+
+    expect(result.current.voiceType).toBe('warm-male');
+    expect(localStorage.getItem('wta-tts-voice-type')).toBe('warm-male');
+  });
 });

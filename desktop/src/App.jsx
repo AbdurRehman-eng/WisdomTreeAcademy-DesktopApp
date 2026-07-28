@@ -17,6 +17,7 @@ import AssessmentResults from './screens/AssessmentResults';
 import Attendance from './screens/Attendance';
 import Reports from './screens/Reports';
 import SyncSettings from './screens/SyncSettings';
+import TuitionFees from './screens/TuitionFees';
 
 const screenRoles = {
   'dashboard': ['owner', 'admin', 'it_administrator', 'head_teacher', 'accountant', 'secretary', 'teacher'],
@@ -29,11 +30,12 @@ const screenRoles = {
   'assessment-results': ['owner', 'admin', 'head_teacher', 'teacher'],
   'attendance': ['owner', 'admin', 'head_teacher', 'secretary', 'teacher'],
   'reports': ['owner', 'admin', 'head_teacher', 'accountant', 'secretary', 'teacher'],
-  'sync-settings': ['owner', 'admin', 'it_administrator']
+  'sync-settings': ['owner', 'admin', 'it_administrator'],
+  'tuition-fees': ['owner', 'admin', 'accountant', 'secretary']
 };
 
 function MainAppContent() {
-  const { user, activeScreen, syncConflicts, setSyncConflicts, triggerSync, showToast } = useApp();
+  const { user, activeScreen, syncConflicts, setSyncConflicts, triggerSync, showToast, refreshSyncInfo } = useApp();
 
   const handleOverwrite = async () => {
     if (confirm('Are you absolutely sure you want to force sync and overwrite the cloud database versions for these records?')) {
@@ -42,9 +44,23 @@ function MainAppContent() {
     }
   };
 
-  const handleKeepCloud = () => {
+  const handleKeepCloud = async () => {
+    showToast('Resolving conflicts and completing database sync...', 'info');
+    const conflictsToResolve = [...syncConflicts];
     setSyncConflicts([]);
-    showToast('Sync cancelled. Keeping cloud versions.', 'info');
+
+    if (window.api) {
+      const res = await window.api.resolveConflicts(conflictsToResolve);
+      if (res.success) {
+        showToast(`Sync completed successfully! Pushed pending records.`, 'success');
+      } else if (res.hasConflicts) {
+        showToast('Remaining conflicts detected.', 'warning');
+        setSyncConflicts(res.conflicts);
+      } else {
+        showToast(res.error || 'Failed to complete synchronization.', 'error');
+      }
+      refreshSyncInfo();
+    }
   };
 
   // If no user is logged in, show the Login screen
@@ -84,6 +100,8 @@ function MainAppContent() {
         return <Reports />;
       case 'sync-settings':
         return <SyncSettings />;
+      case 'tuition-fees':
+        return <TuitionFees />;
       default:
         return <Dashboard />;
     }

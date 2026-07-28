@@ -16,7 +16,8 @@ import {
   Sliders,
   ChevronLeft,
   ChevronRight,
-  LogOut
+  LogOut,
+  CreditCard
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -37,6 +38,7 @@ export const Sidebar = () => {
     { id: 'assessment-results', label: 'Assessment Results', icon: BarChart3, roles: ['owner', 'admin', 'head_teacher', 'teacher'] },
     { id: 'attendance', label: 'Attendance', icon: CalendarDays, roles: ['owner', 'admin', 'head_teacher', 'secretary', 'teacher'] },
     { id: 'reports', label: 'Reports Center', icon: FileText, roles: ['owner', 'admin', 'head_teacher', 'accountant', 'secretary', 'teacher'] },
+    { id: 'tuition-fees', label: 'Tuition & Fees', icon: CreditCard, roles: ['owner', 'admin', 'accountant', 'secretary'] },
     { id: 'sync-settings', label: 'Sync & Settings', icon: Sliders, roles: ['owner', 'admin', 'it_administrator'] }
   ];
 

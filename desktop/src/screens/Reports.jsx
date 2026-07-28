@@ -7,6 +7,7 @@ import './Reports.css';
 
 function getPerformanceBand(percent) {
   if (percent >= 90) return { label: 'Exceeded Expectations', css: 'exceeded', icon: '🏆' };
+  if (percent >= 60) return { label: 'Met Expectations',      css: 'met',      icon: '✨' };
   return               { label: 'Below Expectations',         css: 'below',    icon: '📌' };
 }
 
@@ -61,6 +62,82 @@ export const Reports = () => {
       ? `<img src="${schoolLogo}" style="max-height: 48px; object-fit: contain; margin-right: 12px; border-radius: 4px;" alt="Logo" />`
       : `<span style="font-size: 28px; margin-right: 12px;">🌳</span>`;
 
+    const subject = (results.length > 0 ? results[0].subject : null) || 'General';
+
+    // Group responses by skill category
+    const categories = {
+      'Numeracy & Early Math': { correct: 0, total: 0 },
+      'Phonics & Language Arts': { correct: 0, total: 0 },
+      'Visual & Shape Recognition': { correct: 0, total: 0 },
+      'General Comprehension': { correct: 0, total: 0 }
+    };
+
+    results.forEach(r => {
+      const text = (r.questionText || '').toLowerCase();
+      let cat = 'General Comprehension';
+      
+      if (
+        text.includes('count') || text.includes('number') || text.includes('math') || 
+        text.includes('add') || text.includes('subtract') || text.includes('sum') || 
+        text.includes('geometry') || text.includes('shape') || text.includes('triangle') || 
+        text.includes('circle') || text.includes('square') || text.includes('rectangle') || 
+        text.includes('plus') || text.includes('minus') || text.includes('equals') || 
+        text.includes('digit') || text.includes('numer')
+      ) {
+        cat = 'Numeracy & Early Math';
+      } else if (
+        text.includes('word') || text.includes('letter') || text.includes('spelling') || 
+        text.includes('alphabet') || text.includes('phonics') || text.includes('rhyme') || 
+        text.includes('read') || text.includes('sound') || text.includes('vowel') || 
+        text.includes('consonant') || text.includes('sentence') || text.includes('grammar')
+      ) {
+        cat = 'Phonics & Language Arts';
+      } else if (
+        text.includes('color') || text.includes('picture') || text.includes('look') || 
+        text.includes('match') || text.includes('find') || text.includes('identify') || 
+        text.includes('spot') || text.includes('difference') || text.includes('pattern') || 
+        text.includes('visual')
+      ) {
+        cat = 'Visual & Shape Recognition';
+      }
+
+      let isCorrect = false;
+      if (r.isCorrect !== undefined) {
+        isCorrect = r.isCorrect === true || r.isCorrect === 'true';
+      } else if (r.is_correct !== undefined) {
+        isCorrect = r.is_correct === true || r.is_correct === 'true';
+      } else if (r.correct !== undefined) {
+        if (typeof r.correct === 'boolean') isCorrect = r.correct;
+        else if (r.correct === 'true') isCorrect = true;
+        else if (r.correct === 'false') isCorrect = false;
+        else isCorrect = r.selectedAnswer !== undefined && String(r.selectedAnswer).trim().toLowerCase() === String(r.correct).trim().toLowerCase();
+      } else {
+        const sel = r.selectedAnswer || r.selected_answer;
+        const cor = r.correctAnswer || r.correct_answer;
+        if (sel !== undefined && cor !== undefined) {
+          isCorrect = String(sel).trim().toLowerCase() === String(cor).trim().toLowerCase();
+        }
+      }
+
+      categories[cat].total += 1;
+      if (isCorrect) {
+        categories[cat].correct += 1;
+      }
+    });
+
+    const strengths = [];
+    const weaknesses = [];
+
+    Object.entries(categories).forEach(([catName, stats]) => {
+      if (stats.total === 0) return;
+      const scorePct = Math.round((stats.correct / stats.total) * 100);
+      if (scorePct >= 75) {
+        strengths.push(`${catName} (${scorePct}%)`);
+      } else {
+        weaknesses.push(`${catName} (${scorePct}%)`);
+      }
+    });
+
     return `
       <div class="report-page" style="page-break-after: always;">
         <div class="report-header" style="display: flex; align-items: center; justify-content: space-between;">
@@ -82,7 +159,7 @@ export const Reports = () => {
             <div class="info-row"><span class="info-label">Student Name</span><span class="info-value">${item.student_name}</span></div>
             <div class="info-row"><span class="info-label">Roll Number</span><span class="info-value">${item.student_roll || '—'}</span></div>
             <div class="info-row"><span class="info-label">Grade / Class</span><span class="info-value">${item.student_class}</span></div>
-            <div class="info-row"><span class="info-label">Report Generated</span><span class="info-value">${new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })}</span></div>
+            <div class="info-row"><span class="info-label">Assessed Subject</span><span class="info-value">${subject}</span></div>
           </div>
           <div class="score-summary-grid">
             <div class="score-card primary">
@@ -107,6 +184,24 @@ export const Reports = () => {
                 band.css === 'met'      ? 'Score 60–89%. Student demonstrates adequate understanding of assessed concepts.' :
                                          'Score < 60%. Student may require additional support in assessed areas.'
               }</div>
+            </div>
+          </div>
+
+          <div class="section-title" style="margin-top: 20px;">Diagnostic Focus & Recommended Interventions</div>
+          <div class="diagnostic-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px; margin-bottom: 20px;">
+            <div class="diag-card strengths" style="background: rgba(34, 197, 94, 0.05); border: 1px solid rgba(34, 197, 94, 0.2); border-radius: 8px; padding: 12px 16px;">
+              <h4 style="color: #15803d; margin-top: 0; margin-bottom: 8px; font-size: 13px;">🟢 Core Strengths</h4>
+              ${strengths.length > 0 
+                ? `<ul style="margin: 0; padding-left: 20px; color: #1e293b; font-size: 12px; line-height: 1.4;">${strengths.map(s => `<li style="margin-bottom: 4px;">${s} — Mastered concept category.</li>`).join('')}</ul>`
+                : `<p style="margin: 0; color: #64748b; font-size: 12px; font-style: italic;">No categories reached the 75% mastery threshold in this assessment.</p>`
+              }
+            </div>
+            <div class="diag-card interventions" style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 12px 16px;">
+              <h4 style="color: #b91c1c; margin-top: 0; margin-bottom: 8px; font-size: 13px;">Recommended Interventions</h4>
+              ${weaknesses.length > 0 
+                ? `<ul style="margin: 0; padding-left: 20px; color: #1e293b; font-size: 12px; line-height: 1.4;">${weaknesses.map(w => `<li style="margin-bottom: 4px;">${w} — Target area requiring support.</li>`).join('')}</ul>`
+                : `<p style="margin: 0; color: #15803d; font-size: 12px; font-weight: 600;">Excellent master profile: no interventions needed!</p>`
+              }
             </div>
           </div>
           ${results.length > 0 ? `

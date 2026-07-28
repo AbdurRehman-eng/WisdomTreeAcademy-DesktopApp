@@ -298,7 +298,7 @@ export const TeachersAdmins = () => {
           </>
         }
       >
-        <form onSubmit={handleSubmit} className="flex flex-col gap-md" style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: '6px' }}>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-md">
           <div className="form-group">
             <label className="form-label">Full Name</label>
             <input
@@ -310,6 +310,31 @@ export const TeachersAdmins = () => {
               onChange={(e) => setName(e.target.value)}
             />
           </div>
+
+          <div className="form-group">
+            <label className="form-label">Username</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="e.g. sandra.teach"
+              value={username}
+              disabled={!!editingTeacher || isReadOnly}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </div>
+
+          {!isReadOnly && (
+            <div className="form-group">
+              <label className="form-label">System Access Passcode</label>
+              <input
+                type="password"
+                className="form-input"
+                placeholder={editingTeacher ? 'Leave blank to keep unchanged' : '••••••••'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
+          )}
 
           <div className="form-group">
             <label className="form-label">Email Address (Optional)</label>
@@ -379,31 +404,6 @@ export const TeachersAdmins = () => {
               <option value="inactive">Inactive</option>
             </select>
           </div>
-
-          <div className="form-group">
-            <label className="form-label">Username</label>
-            <input
-              type="text"
-              className="form-input"
-              placeholder="e.g. sandra.teach"
-              value={username}
-              disabled={!!editingTeacher || isReadOnly}
-              onChange={(e) => setUsername(e.target.value)}
-            />
-          </div>
-
-          {!isReadOnly && (
-            <div className="form-group">
-              <label className="form-label">System Access Passcode</label>
-              <input
-                type="password"
-                className="form-input"
-                placeholder={editingTeacher ? 'Leave blank to keep unchanged' : '••••••••'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          )}
 
           {/* Teacher Assignments section */}
           {role === 'teacher' && (

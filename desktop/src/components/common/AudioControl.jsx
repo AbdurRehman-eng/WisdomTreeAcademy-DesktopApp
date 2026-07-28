@@ -17,7 +17,7 @@ export const AudioControl = ({
   theme = 'default',
   autoPlay = false,
 }) => {
-  const { isSpeaking, isPaused, speak, pause, resume, replay, isSupported } = useTTS(audioText);
+  const { isSpeaking, isPaused, speak, pause, resume, replay, isSupported, voiceType, changeVoiceType } = useTTS(audioText);
 
   React.useEffect(() => {
     if (autoPlay && isSupported && audioText) {
@@ -72,6 +72,19 @@ export const AudioControl = ({
         <RotateCcw size={theme === 'child' ? 20 : 14} />
         {theme === 'child' && <span className="btn-label-text">Replay</span>}
       </button>
+
+      {isSupported && (
+        <select
+          value={voiceType}
+          onChange={(e) => changeVoiceType(e.target.value)}
+          className="audio-voice-select"
+          title="Select voice tone"
+        >
+          <option value="friendly-female">Friendly Female (Kids)</option>
+          <option value="warm-male">Warm Male</option>
+          <option value="system-default">System Default</option>
+        </select>
+      )}
 
       <div className={`waveform-visualizer ${isSpeaking ? 'active' : ''}`}>
         <svg viewBox="0 0 100 40" className="waveform-svg">

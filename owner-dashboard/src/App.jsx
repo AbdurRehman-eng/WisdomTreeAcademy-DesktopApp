@@ -22,7 +22,9 @@ import {
   FileText,
   Lock,
   Database,
-  History
+  History,
+  DollarSign,
+  CreditCard
 } from 'lucide-react';
 
 async function hashPasswordBrowser(password) {
@@ -214,6 +216,15 @@ export default function App() {
   // Selected Assessment for Modal Details View
   const [selectedAssessment, setSelectedAssessment] = useState(null);
 
+  // Tuition & Fees state
+  const [tuitionRecords, setTuitionRecords] = useState([]);
+  const [tuitionPayments, setTuitionPayments] = useState([]);
+  const [selectedTuitionStudent, setSelectedTuitionStudent] = useState(null);
+  const [showTuitionPaymentsModal, setShowTuitionPaymentsModal] = useState(false);
+  const [tuitionSearch, setTuitionSearch] = useState('');
+  const [tuitionClassFilter, setTuitionClassFilter] = useState('All');
+  const [tuitionStatusFilter, setTuitionStatusFilter] = useState('All');
+
   // Licensing Tool State
   const [licSchoolCode, setLicSchoolCode] = useState('');
   const [licMaxGrade, setLicMaxGrade] = useState('G5');
@@ -372,6 +383,31 @@ export default function App() {
         }
       } catch (err) {
         console.warn('Failed to load school logo setting:', err);
+      }
+
+      // Gracefully fetch tuition records
+      try {
+        const { data: resTuition, error: resTuitionErr } = await client
+          .from('student_tuition')
+          .select('*');
+        if (!resTuitionErr && resTuition) {
+          setTuitionRecords(resTuition);
+        }
+      } catch (err) {
+        console.warn('Failed to load student_tuition:', err);
+      }
+
+      // Gracefully fetch tuition payments
+      try {
+        const { data: resPayments, error: resPaymentsErr } = await client
+          .from('tuition_payments')
+          .select('*')
+          .order('payment_date', { ascending: false });
+        if (!resPaymentsErr && resPayments) {
+          setTuitionPayments(resPayments);
+        }
+      } catch (err) {
+        console.warn('Failed to load tuition_payments:', err);
       }
     } catch (e) {
       console.error('Failed to load data:', e);
@@ -810,7 +846,11 @@ export default function App() {
     return `${Math.round(((present + late * 0.8) / total) * 100)}%`;
   })();
 
-  // Filter students based on search query and classroom filter
+  // Tuition & Fees Aggregations
+  const totalCharged = tuitionRecords.reduce((acc, curr) => acc + (curr.total_charged || 0), 0);
+  const totalPaid = tuitionRecords.reduce((acc, curr) => acc + (curr.amount_paid || 0), 0);
+  const totalOutstanding = totalCharged - totalPaid;
+
   const filteredStudents = students.filter(s => {
     const matchesSearch = s.name?.toLowerCase().includes(studentSearch.toLowerCase()) || 
                           s.roll_number?.toLowerCase().includes(studentSearch.toLowerCase());
@@ -1162,6 +1202,17 @@ export default function App() {
             </li>
             <li>
               <button
+                className={`nav-item ${activeTab === 'tuition' ? 'active' : ''} ${isTabLocked('tuition') ? 'disabled' : ''}`}
+                onClick={() => !isTabLocked('tuition') && setActiveTab('tuition')}
+                style={{ cursor: isTabLocked('tuition') ? 'not-allowed' : 'pointer', width: '100%', display: 'flex', alignItems: 'center' }}
+              >
+                <CreditCard size={18} />
+                <span>Tuition &amp; Fees</span>
+                {isTabLocked('tuition') && <Lock size={12} style={{ marginLeft: 'auto', opacity: 0.5 }} />}
+              </button>
+            </li>
+            <li>
+              <button
                 className={`nav-item ${activeTab === 'licensing' ? 'active' : ''}`}
                 onClick={() => setActiveTab('licensing')}
                 style={{ width: '100%', display: 'flex', alignItems: 'center' }}
@@ -1225,6 +1276,7 @@ export default function App() {
               {activeTab === 'assessments' && 'Diagnostic Assessment Transcripts'}
               {activeTab === 'attendance' && 'Student & Teacher Attendance Audit'}
               {activeTab === 'logs' && 'Franchise Activity & Operations Audit Logs'}
+              {activeTab === 'tuition' && 'School Tuition & Fees Ledger'}
               {activeTab === 'licensing' && 'Offline License Key Generator'}
               {activeTab === 'profile' && 'Owner Console Security Profile'}
             </h2>
@@ -1277,6 +1329,17 @@ export default function App() {
                 </div>
                 <div className="card-value">{attendanceRate}</div>
                 <div className="card-footer-text">Overall student presence average</div>
+              </div>
+
+              <div className="card" onClick={() => setActiveTab('tuition')} style={{ cursor: 'pointer' }}>
+                <div className="card-title-row">
+                  <span>Outstanding Tuition</span>
+                  <DollarSign size={20} style={{ color: 'var(--color-error)' }} />
+                </div>
+                <div className="card-value">
+                  {new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(totalOutstanding)}
+                </div>
+                <div className="card-footer-text">Total school unpaid fees</div>
               </div>
             </div>
 
@@ -2190,6 +2253,192 @@ export default function App() {
           </div>
         )}
 
+        {/* TUITION & FEES TAB */}
+        {activeTab === 'tuition' && (
+          <div className="fade-in">
+            {/* Metrics cards */}
+            <div className="dashboard-grid">
+              <div className="card">
+                <div className="card-title-row">
+                  <span>Gross Tuition Obligation</span>
+                  <DollarSign size={20} className="color-primary" />
+                </div>
+                <div className="card-value">
+                  {new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(totalCharged)}
+                </div>
+                <div className="card-footer-text">Gross tuition and fee obligations</div>
+              </div>
+
+              <div className="card">
+                <div className="card-title-row">
+                  <span>Deposited Collections</span>
+                  <Award size={20} style={{ color: 'var(--color-success)' }} />
+                </div>
+                <div className="card-value" style={{ color: 'var(--color-success)' }}>
+                  {new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(totalPaid)}
+                </div>
+                <div className="card-footer-text">Deposited collection receipts</div>
+              </div>
+
+              <div className="card">
+                <div className="card-title-row">
+                  <span>Total School Receivables</span>
+                  <Users size={20} style={{ color: 'var(--color-error)' }} />
+                </div>
+                <div className="card-value" style={{ color: 'var(--color-error)' }}>
+                  {new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(totalOutstanding)}
+                </div>
+                <div className="card-footer-text">Receivable balance assets</div>
+              </div>
+
+              <div className="card">
+                <div className="card-title-row">
+                  <span>Collection Progress</span>
+                  <TrendingUp size={20} style={{ color: 'var(--color-warning)' }} />
+                </div>
+                <div className="card-value">
+                  {totalCharged > 0 ? Math.round((totalPaid / totalCharged) * 100) : 100}%
+                </div>
+                <div className="card-footer-text">Receipt collection percentage</div>
+              </div>
+            </div>
+
+            {/* Filter toolbar */}
+            <div className="card" style={{ padding: '16px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '250px', position: 'relative' }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    style={{ width: '100%', paddingLeft: '12px' }}
+                    placeholder="Search student name or roll number..."
+                    value={tuitionSearch}
+                    onChange={e => setTuitionSearch(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ minWidth: '150px' }}>
+                  <select
+                    className="form-input"
+                    style={{ width: '100%' }}
+                    value={tuitionClassFilter}
+                    onChange={e => setTuitionClassFilter(e.target.value)}
+                  >
+                    <option value="All">All Grades</option>
+                    {['Pre-K', 'Kindergarten', 'Nursery', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5'].map(g => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ minWidth: '150px' }}>
+                  <select
+                    className="form-input"
+                    style={{ width: '100%' }}
+                    value={tuitionStatusFilter}
+                    onChange={e => setTuitionStatusFilter(e.target.value)}
+                  >
+                    <option value="All">All Statuses</option>
+                    <option value="Paid">Paid</option>
+                    <option value="Partially Paid">Partially Paid</option>
+                    <option value="Outstanding">Outstanding</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Tuition table list */}
+            <div className="card" style={{ padding: 0 }}>
+              <div className="table-container">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Roll Number</th>
+                      <th>Student Name</th>
+                      <th>Class / Grade</th>
+                      <th>Tuition Charged</th>
+                      <th>Amount Paid</th>
+                      <th>Outstanding Balance</th>
+                      <th>Payment Status</th>
+                      <th style={{ textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      const filtered = students.filter(s => s.status === 'active' || !s.status).map(s => {
+                        const tr = tuitionRecords.find(t => t.student_id === s.id) || { total_charged: 0, amount_paid: 0 };
+                        const outstanding = Math.max(0, tr.total_charged - tr.amount_paid);
+                        let status = 'Outstanding';
+                        if (tr.total_charged > 0) {
+                          if (tr.amount_paid >= tr.total_charged) status = 'Paid';
+                          else if (tr.amount_paid > 0) status = 'Partially Paid';
+                        } else {
+                          status = 'Paid';
+                        }
+                        return {
+                          ...s,
+                          total_charged: tr.total_charged || 0,
+                          amount_paid: tr.amount_paid || 0,
+                          outstanding,
+                          status
+                        };
+                      }).filter(item => {
+                        const matchesSearch = item.name?.toLowerCase().includes(tuitionSearch.toLowerCase()) ||
+                                              item.roll_number?.toLowerCase().includes(tuitionSearch.toLowerCase());
+                        const matchesClass = tuitionClassFilter === 'All' || item.class === tuitionClassFilter;
+                        const matchesStatus = tuitionStatusFilter === 'All' || item.status === tuitionStatusFilter;
+                        return matchesSearch && matchesClass && matchesStatus;
+                      });
+
+                      if (filtered.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan="8" className="text-center" style={{ color: 'var(--text-secondary)', padding: '24px' }}>
+                              No matching student tuition records found.
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      return filtered.map(row => (
+                        <tr key={row.id}>
+                          <td>{row.roll_number}</td>
+                          <td><strong>{row.name}</strong></td>
+                          <td>{row.class}</td>
+                          <td>{new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(row.total_charged)}</td>
+                          <td style={{ color: 'var(--color-success)', fontWeight: 600 }}>
+                            {new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(row.amount_paid)}
+                          </td>
+                          <td style={{ color: row.outstanding > 0 ? 'var(--color-error)' : 'var(--color-success)', fontWeight: 600 }}>
+                            {new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(row.outstanding)}
+                          </td>
+                          <td>
+                            <span className={`badge ${row.status === 'Paid' ? 'badge-success' : row.status === 'Partially Paid' ? 'badge-warning' : 'badge-error'}`}>
+                              {row.status}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <button
+                              className="btn btn-secondary"
+                              style={{ padding: '6px 12px', fontSize: '12px' }}
+                              onClick={() => {
+                                setSelectedTuitionStudent(row);
+                                setShowTuitionPaymentsModal(true);
+                              }}
+                            >
+                              View Ledger
+                            </button>
+                          </td>
+                        </tr>
+                      ));
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
 
         {/* CONSOLE PROFILE TAB */}
         {activeTab === 'profile' && (
@@ -3014,6 +3263,82 @@ export default function App() {
                 onClick={() => { setShowVersionsModal(false); setSelectedQuestionForVersions(null); }}
               >
                 Close History
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TUITION PAYMENT HISTORY MODAL */}
+      {showTuitionPaymentsModal && selectedTuitionStudent && (
+        <div className="modal-overlay" onClick={() => { setShowTuitionPaymentsModal(false); setSelectedTuitionStudent(null); }}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '700px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">Tuition Payment Ledger History</h3>
+              <button className="close-btn" onClick={() => { setShowTuitionPaymentsModal(false); setSelectedTuitionStudent(null); }}>&times;</button>
+            </div>
+
+            <div style={{ marginBottom: '14px' }}>
+              <p style={{ margin: 0, fontSize: '15px', fontWeight: 600 }}>
+                Student Name: <span style={{ color: 'var(--color-primary)' }}>{selectedTuitionStudent.name}</span>
+              </p>
+              <p style={{ margin: '4px 0 0 0', fontSize: '12.5px', color: 'var(--text-secondary)' }}>
+                Roll Number: <strong>{selectedTuitionStudent.roll_number}</strong> | Class/Grade: <strong>{selectedTuitionStudent.class}</strong>
+              </p>
+            </div>
+
+            <div style={{ maxHeight: '350px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '10px', background: 'var(--bg-app)' }}>
+              {(() => {
+                const payments = tuitionPayments.filter(p => p.student_id === selectedTuitionStudent.id);
+                if (payments.length === 0) {
+                  return (
+                    <div style={{ textAlign: 'center', padding: '30px 20px', color: 'var(--text-secondary)' }}>
+                      No payment history records found for this student.
+                    </div>
+                  );
+                }
+                return (
+                  <div className="table-container" style={{ border: 'none', background: 'transparent', padding: 0 }}>
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Amount</th>
+                          <th>Method</th>
+                          <th>Notes / Reference</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {payments.map((pm, idx) => (
+                          <tr key={pm.id || idx}>
+                            <td>{pm.payment_date}</td>
+                            <td style={{ color: 'var(--color-success)', fontWeight: 'bold' }}>
+                              {new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(pm.amount)}
+                            </td>
+                            <td>
+                              <span className="badge badge-success" style={{ background: 'rgba(52, 211, 153, 0.15)', color: 'var(--color-success)', border: 'none' }}>
+                                {pm.payment_method}
+                              </span>
+                            </td>
+                            <td style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                              {pm.notes || '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => { setShowTuitionPaymentsModal(false); setSelectedTuitionStudent(null); }}
+              >
+                Close Ledger
               </button>
             </div>
           </div>

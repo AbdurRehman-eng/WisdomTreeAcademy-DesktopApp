@@ -69,6 +69,9 @@ function initDatabase() {
   if (!qColNames.includes('approval_status')) {
     db.prepare("ALTER TABLE question_bank ADD COLUMN approval_status TEXT DEFAULT 'approved'").run();
   }
+  if (!qColNames.includes('difficulty')) {
+    db.prepare("ALTER TABLE question_bank ADD COLUMN difficulty TEXT DEFAULT 'Medium'").run();
+  }
   // Initialize existing questions to 'approved'
   try {
     db.prepare("UPDATE question_bank SET approval_status = 'approved' WHERE approval_status IS NULL").run();
@@ -99,12 +102,48 @@ function initDatabase() {
       audio_text TEXT,
       options_json TEXT NOT NULL,
       correct_answer TEXT NOT NULL,
+      difficulty TEXT DEFAULT 'Medium',
       version_number INTEGER NOT NULL,
       changed_by TEXT NOT NULL,
       sync_status TEXT DEFAULT 'pending',
       updated_at INTEGER NOT NULL
     )
   `).run();
+
+  const qvCols = db.prepare("PRAGMA table_info(question_versions)").all();
+  if (!qvCols.some(c => c.name === 'difficulty')) {
+    db.prepare("ALTER TABLE question_versions ADD COLUMN difficulty TEXT DEFAULT 'Medium'").run();
+  }
+
+  // Create student_tuition table
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS student_tuition (
+      id TEXT PRIMARY KEY,
+      student_id TEXT UNIQUE NOT NULL,
+      total_charged REAL NOT NULL DEFAULT 0.0,
+      amount_paid REAL NOT NULL DEFAULT 0.0,
+      updated_at INTEGER NOT NULL,
+      sync_status TEXT DEFAULT 'pending',
+      FOREIGN KEY (student_id) REFERENCES students(id)
+    )
+  `).run();
+
+  // Create tuition_payments table
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS tuition_payments (
+      id TEXT PRIMARY KEY,
+      student_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      payment_date TEXT NOT NULL,
+      payment_method TEXT NOT NULL,
+      notes TEXT,
+      updated_at INTEGER NOT NULL,
+      sync_status TEXT DEFAULT 'pending',
+      FOREIGN KEY (student_id) REFERENCES students(id)
+    )
+  `).run();
+
+  db.prepare(`CREATE INDEX IF NOT EXISTS idx_tuition_payments_student ON tuition_payments(student_id)`).run();
 
   // Ensure unique index on attendance for conflict resolution (upsert)
   try {
@@ -342,6 +381,98 @@ function registerIpcHandlers() {
     return { success: true };
   });
 
+  // Tuition IPC Handlers
+  ipcMain.handle('db:get-tuition-fees', () => {
+    try {
+      return db.prepare(`
+        SELECT 
+          s.id as student_id,
+          s.name as student_name,
+          s.roll_number,
+          s.class as student_class,
+          COALESCE(t.total_charged, 0.0) as total_charged,
+          COALESCE(t.amount_paid, 0.0) as amount_paid,
+          t.id as tuition_id
+        FROM students s
+        LEFT JOIN student_tuition t ON s.id = t.student_id
+        WHERE s.status = 'active'
+        ORDER BY s.name ASC
+      `).all();
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:get-student-payment-history', (event, studentId) => {
+    try {
+      return db.prepare("SELECT * FROM tuition_payments WHERE student_id = ? ORDER BY payment_date DESC, updated_at DESC").all(studentId);
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:update-student-tuition', (event, { studentId, totalCharged }) => {
+    try {
+      const now = Date.now();
+      const existing = db.prepare("SELECT id, amount_paid FROM student_tuition WHERE student_id = ?").get(studentId);
+      const tuitionId = existing ? existing.id : crypto.randomUUID();
+      const amountPaid = existing ? existing.amount_paid : 0.0;
+
+      db.prepare(`
+        INSERT INTO student_tuition (id, student_id, total_charged, amount_paid, updated_at, sync_status)
+        VALUES (?, ?, ?, ?, ?, 'pending')
+        ON CONFLICT(student_id) DO UPDATE SET
+          total_charged = excluded.total_charged,
+          sync_status = 'pending',
+          updated_at = excluded.updated_at
+      `).run(tuitionId, studentId, totalCharged, amountPaid, now);
+
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('db:record-tuition-payment', (event, { studentId, amount, paymentDate, paymentMethod, notes }) => {
+    try {
+      const now = Date.now();
+      const paymentId = crypto.randomUUID();
+
+      const recordTransaction = db.transaction(() => {
+        // 1. Insert transaction ledger entry
+        db.prepare(`
+          INSERT INTO tuition_payments (id, student_id, amount, payment_date, payment_method, notes, updated_at, sync_status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+        `).run(paymentId, studentId, amount, paymentDate, paymentMethod, notes, now);
+
+        // 2. Fetch or create overall summary
+        const existing = db.prepare("SELECT id, amount_paid, total_charged FROM student_tuition WHERE student_id = ?").get(studentId);
+        if (existing) {
+          db.prepare(`
+            UPDATE student_tuition 
+            SET amount_paid = amount_paid + ?, sync_status = 'pending', updated_at = ?
+            WHERE id = ?
+          `).run(amount, now, existing.id);
+        } else {
+          const tuitionId = crypto.randomUUID();
+          db.prepare(`
+            INSERT INTO student_tuition (id, student_id, total_charged, amount_paid, updated_at, sync_status)
+            VALUES (?, ?, 0.0, ?, ?, 'pending')
+          `).run(tuitionId, studentId, amount, now);
+        }
+      });
+
+      recordTransaction();
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  });
+
   // Teachers/Admins IPC
   ipcMain.handle('db:get-teachers', () => {
     return db.prepare(`
@@ -486,10 +617,11 @@ function registerIpcHandlers() {
     }));
   });
   ipcMain.handle('db:save-question', (event, q) => {
-    const { id, class: cls, subject, text, audioText, options, correct_answer, image_path, currentUserId, currentUserRole } = q;
+    const { id, class: cls, subject, text, audioText, options, correct_answer, image_path, difficulty, currentUserId, currentUserRole } = q;
     const now = Date.now();
     const idToUse = id || crypto.randomUUID();
     const optionsJson = JSON.stringify(options);
+    const targetDifficulty = difficulty || 'Medium';
 
     // Determine target approval status.
     // If it's a new question or updated by a teacher, it goes to 'pending_approval'.
@@ -500,8 +632,8 @@ function registerIpcHandlers() {
     }
 
     db.prepare(`
-      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, approval_status, status, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
+      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, difficulty, approval_status, status, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
       ON CONFLICT(id) DO UPDATE SET
         class = excluded.class,
         subject = excluded.subject,
@@ -510,10 +642,11 @@ function registerIpcHandlers() {
         options_json = excluded.options_json,
         correct_answer = excluded.correct_answer,
         image_path = excluded.image_path,
+        difficulty = excluded.difficulty,
         approval_status = excluded.approval_status,
         sync_status = 'pending',
         updated_at = excluded.updated_at
-    `).run(idToUse, cls, subject, text, audioText, optionsJson, correct_answer, image_path || null, approvalStatus, now);
+    `).run(idToUse, cls, subject, text, audioText, optionsJson, correct_answer, image_path || null, targetDifficulty, approvalStatus, now);
 
     // Determine version number
     let versionNum = 1;
@@ -524,9 +657,9 @@ function registerIpcHandlers() {
 
     // Insert version history
     db.prepare(`
-      INSERT INTO question_versions (id, question_id, class, subject, text, audio_text, options_json, correct_answer, version_number, changed_by, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-    `).run(crypto.randomUUID(), idToUse, cls, subject, text, audioText || '', optionsJson, correct_answer, versionNum, currentUserId || 'unknown', now);
+      INSERT INTO question_versions (id, question_id, class, subject, text, audio_text, options_json, correct_answer, difficulty, version_number, changed_by, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    `).run(crypto.randomUUID(), idToUse, cls, subject, text, audioText || '', optionsJson, correct_answer, targetDifficulty, versionNum, currentUserId || 'unknown', now);
 
     writeAuditLog(currentUserId || 'unknown', 'SAVE_QUESTION', `Saved version ${versionNum} of question "${text.substring(0, 30)}..." (${approvalStatus})`);
     return { success: true, id: idToUse };
@@ -550,18 +683,19 @@ function registerIpcHandlers() {
   ipcMain.handle('db:import-questions', (event, questions, currentUserId) => {
     const now = Date.now();
     const insert = db.prepare(`
-      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, approval_status, status, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'active', 'pending', ?)
+      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, difficulty, approval_status, status, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'active', 'pending', ?)
     `);
     const insertVersion = db.prepare(`
-      INSERT INTO question_versions (id, question_id, class, subject, text, audio_text, options_json, correct_answer, version_number, changed_by, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'pending', ?)
+      INSERT INTO question_versions (id, question_id, class, subject, text, audio_text, options_json, correct_answer, difficulty, version_number, changed_by, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'pending', ?)
     `);
     
     const transaction = db.transaction((list) => {
       for (const q of list) {
         const qId = q.id || crypto.randomUUID();
         const optsJson = JSON.stringify(q.options);
+        const diff = q.difficulty || 'Medium';
         insert.run(
           qId,
           q.class,
@@ -571,6 +705,7 @@ function registerIpcHandlers() {
           optsJson,
           q.correct,
           q.image_path || null,
+          diff,
           now
         );
         insertVersion.run(
@@ -582,6 +717,7 @@ function registerIpcHandlers() {
           q.audioText || '',
           optsJson,
           q.correct,
+          diff,
           currentUserId || 'unknown',
           now
         );
@@ -805,6 +941,40 @@ function registerIpcHandlers() {
         // Partial sync — stay online but report errors
         db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
         return { success: false, error: result.errors.join('; '), syncedCount: result.syncedCount };
+      }
+    } catch (e) {
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'offline')").run();
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('sync:resolve-conflicts', async (event, conflicts) => {
+    try {
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'syncing')").run();
+
+      const urlRow = db.prepare("SELECT value FROM settings WHERE key = 'sync_endpoint'").get();
+      const keyRow = db.prepare("SELECT value FROM settings WHERE key = 'sync_api_key'").get();
+      const projectUrl = urlRow ? urlRow.value : '';
+      const apiKey     = keyRow ? keyRow.value : '';
+
+      const { resolveConflictsWithCloud, pushPendingRecords } = require('./utils/syncHelper.cjs');
+      const res = await resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts);
+
+      if (res.success) {
+        // Re-trigger sync immediately to flush the remaining pending records
+        const syncRes = await pushPendingRecords(db, projectUrl, apiKey, false);
+        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+
+        if (syncRes.success) {
+          return { success: true, syncedCount: syncRes.syncedCount };
+        } else if (syncRes.hasConflicts) {
+          return { success: false, hasConflicts: true, conflicts: syncRes.conflicts };
+        } else {
+          return { success: false, error: syncRes.errors.join('; '), syncedCount: syncRes.syncedCount };
+        }
+      } else {
+        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+        return { success: false, error: res.error };
       }
     } catch (e) {
       db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'offline')").run();
@@ -1050,7 +1220,7 @@ function registerIpcHandlers() {
     if (!filePath) return { success: false, error: 'Cancelled' };
     try {
       const questions = db.prepare("SELECT * FROM question_bank WHERE status = 'active'").all();
-      let csvContent = 'id,class,subject,text,audio_text,options,correct_answer,image_path\n';
+      let csvContent = 'id,class,subject,text,audio_text,options,correct_answer,image_path,difficulty\n';
       const escapeCSV = (str) => {
         if (str === null || str === undefined) return '';
         const s = String(str).replace(/"/g, '""');
@@ -1063,8 +1233,8 @@ function registerIpcHandlers() {
         } catch (e) {
           opts = [];
         }
-        const optionsStr = opts.join('|');
-        csvContent += `${escapeCSV(q.id)},${escapeCSV(q.class)},${escapeCSV(q.subject)},${escapeCSV(q.text)},${escapeCSV(q.audio_text)},${escapeCSV(optionsStr)},${escapeCSV(q.correct_answer)},${escapeCSV(q.image_path)}\n`;
+        const optionsStr = opts.map(o => typeof o === 'object' ? JSON.stringify(o) : o).join('|');
+        csvContent += `${escapeCSV(q.id)},${escapeCSV(q.class)},${escapeCSV(q.subject)},${escapeCSV(q.text)},${escapeCSV(q.audio_text)},${escapeCSV(optionsStr)},${escapeCSV(q.correct_answer)},${escapeCSV(q.image_path)},${escapeCSV(q.difficulty || 'Medium')}\n`;
       }
       fs.writeFileSync(filePath, csvContent, 'utf8');
       return { success: true };

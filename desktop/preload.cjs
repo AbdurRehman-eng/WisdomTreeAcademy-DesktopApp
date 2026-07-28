@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('api', {
   saveStudent: (student) => ipcRenderer.invoke('db:save-student', student),
   deleteStudent: (id) => ipcRenderer.invoke('db:delete-student', id),
   
+  // Tuition & Fees
+  getTuitionFees: () => ipcRenderer.invoke('db:get-tuition-fees'),
+  getStudentPaymentHistory: (studentId) => ipcRenderer.invoke('db:get-student-payment-history', studentId),
+  updateStudentTuition: (payload) => ipcRenderer.invoke('db:update-student-tuition', payload),
+  recordTuitionPayment: (payload) => ipcRenderer.invoke('db:record-tuition-payment', payload),
+
   // Teachers / Admins
   getTeachers: () => ipcRenderer.invoke('db:get-teachers'),
   saveTeacher: (teacher) => ipcRenderer.invoke('db:save-teacher', teacher),
@@ -53,6 +59,7 @@ contextBridge.exposeInMainWorld('api', {
   // Sync
   getSyncInfo: () => ipcRenderer.invoke('sync:get-info'),
   triggerSync: (options) => ipcRenderer.invoke('sync:trigger', options),
+  resolveConflicts: (conflicts) => ipcRenderer.invoke('sync:resolve-conflicts', conflicts),
   toggleOnline: () => ipcRenderer.invoke('sync:toggle-online'),
   setSyncConfig: (projectUrl, apiKey) => ipcRenderer.invoke('sync:set-config', projectUrl, apiKey),
   getSyncConfig: () => ipcRenderer.invoke('sync:get-config'),

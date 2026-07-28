@@ -131,3 +131,29 @@
 .audio-theme-child .waveform-visualizer.active .wave-bar {
   fill: var(--color-accent);
 }
+
+.audio-voice-select {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  transition: var(--transition-normal);
+}
+
+.audio-voice-select:hover, .audio-voice-select:focus {
+  border-color: var(--color-primary);
+  background-color: var(--bg-surface);
+}
+
+.audio-theme-child .audio-voice-select {
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-child);
+  font-weight: 600;
+}
