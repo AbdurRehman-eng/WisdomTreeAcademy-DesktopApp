@@ -116,3 +116,28 @@ CREATE TABLE IF NOT EXISTS question_versions (
     sync_status TEXT DEFAULT 'pending',
     updated_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS student_tuition (
+    id TEXT PRIMARY KEY,
+    student_id TEXT UNIQUE NOT NULL,
+    total_charged REAL NOT NULL DEFAULT 0.0,
+    amount_paid REAL NOT NULL DEFAULT 0.0,
+    updated_at INTEGER NOT NULL,
+    sync_status TEXT DEFAULT 'pending',
+    FOREIGN KEY (student_id) REFERENCES students(id)
+);
+
+CREATE TABLE IF NOT EXISTS tuition_payments (
+    id TEXT PRIMARY KEY,
+    student_id TEXT NOT NULL,
+    amount REAL NOT NULL,
+    payment_date TEXT NOT NULL, -- YYYY-MM-DD
+    payment_method TEXT NOT NULL,
+    notes TEXT,
+    updated_at INTEGER NOT NULL,
+    sync_status TEXT DEFAULT 'pending',
+    FOREIGN KEY (student_id) REFERENCES students(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_tuition_payments_student ON tuition_payments(student_id);
+

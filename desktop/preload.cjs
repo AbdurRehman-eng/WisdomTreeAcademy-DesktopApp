@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('api', {
   saveStudent: (student) => ipcRenderer.invoke('db:save-student', student),
   deleteStudent: (id) => ipcRenderer.invoke('db:delete-student', id),
   
+  // Tuition & Fees
+  getTuitionFees: () => ipcRenderer.invoke('db:get-tuition-fees'),
+  getStudentPaymentHistory: (studentId) => ipcRenderer.invoke('db:get-student-payment-history', studentId),
+  updateStudentTuition: (payload) => ipcRenderer.invoke('db:update-student-tuition', payload),
+  recordTuitionPayment: (payload) => ipcRenderer.invoke('db:record-tuition-payment', payload),
+
   // Teachers / Admins
   getTeachers: () => ipcRenderer.invoke('db:get-teachers'),
   saveTeacher: (teacher) => ipcRenderer.invoke('db:save-teacher', teacher),

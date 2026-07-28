@@ -106,6 +106,36 @@ function initDatabase() {
     )
   `).run();
 
+  // Create student_tuition table
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS student_tuition (
+      id TEXT PRIMARY KEY,
+      student_id TEXT UNIQUE NOT NULL,
+      total_charged REAL NOT NULL DEFAULT 0.0,
+      amount_paid REAL NOT NULL DEFAULT 0.0,
+      updated_at INTEGER NOT NULL,
+      sync_status TEXT DEFAULT 'pending',
+      FOREIGN KEY (student_id) REFERENCES students(id)
+    )
+  `).run();
+
+  // Create tuition_payments table
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS tuition_payments (
+      id TEXT PRIMARY KEY,
+      student_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      payment_date TEXT NOT NULL,
+      payment_method TEXT NOT NULL,
+      notes TEXT,
+      updated_at INTEGER NOT NULL,
+      sync_status TEXT DEFAULT 'pending',
+      FOREIGN KEY (student_id) REFERENCES students(id)
+    )
+  `).run();
+
+  db.prepare(`CREATE INDEX IF NOT EXISTS idx_tuition_payments_student ON tuition_payments(student_id)`).run();
+
   // Ensure unique index on attendance for conflict resolution (upsert)
   try {
     db.prepare(`
@@ -340,6 +370,98 @@ function registerIpcHandlers() {
     const now = Date.now();
     db.prepare("UPDATE students SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
     return { success: true };
+  });
+
+  // Tuition IPC Handlers
+  ipcMain.handle('db:get-tuition-fees', () => {
+    try {
+      return db.prepare(`
+        SELECT 
+          s.id as student_id,
+          s.name as student_name,
+          s.roll_number,
+          s.class as student_class,
+          COALESCE(t.total_charged, 0.0) as total_charged,
+          COALESCE(t.amount_paid, 0.0) as amount_paid,
+          t.id as tuition_id
+        FROM students s
+        LEFT JOIN student_tuition t ON s.id = t.student_id
+        WHERE s.status = 'active'
+        ORDER BY s.name ASC
+      `).all();
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:get-student-payment-history', (event, studentId) => {
+    try {
+      return db.prepare("SELECT * FROM tuition_payments WHERE student_id = ? ORDER BY payment_date DESC, updated_at DESC").all(studentId);
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  });
+
+  ipcMain.handle('db:update-student-tuition', (event, { studentId, totalCharged }) => {
+    try {
+      const now = Date.now();
+      const existing = db.prepare("SELECT id, amount_paid FROM student_tuition WHERE student_id = ?").get(studentId);
+      const tuitionId = existing ? existing.id : crypto.randomUUID();
+      const amountPaid = existing ? existing.amount_paid : 0.0;
+
+      db.prepare(`
+        INSERT INTO student_tuition (id, student_id, total_charged, amount_paid, updated_at, sync_status)
+        VALUES (?, ?, ?, ?, ?, 'pending')
+        ON CONFLICT(student_id) DO UPDATE SET
+          total_charged = excluded.total_charged,
+          sync_status = 'pending',
+          updated_at = excluded.updated_at
+      `).run(tuitionId, studentId, totalCharged, amountPaid, now);
+
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('db:record-tuition-payment', (event, { studentId, amount, paymentDate, paymentMethod, notes }) => {
+    try {
+      const now = Date.now();
+      const paymentId = crypto.randomUUID();
+
+      const recordTransaction = db.transaction(() => {
+        // 1. Insert transaction ledger entry
+        db.prepare(`
+          INSERT INTO tuition_payments (id, student_id, amount, payment_date, payment_method, notes, updated_at, sync_status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+        `).run(paymentId, studentId, amount, paymentDate, paymentMethod, notes, now);
+
+        // 2. Fetch or create overall summary
+        const existing = db.prepare("SELECT id, amount_paid, total_charged FROM student_tuition WHERE student_id = ?").get(studentId);
+        if (existing) {
+          db.prepare(`
+            UPDATE student_tuition 
+            SET amount_paid = amount_paid + ?, sync_status = 'pending', updated_at = ?
+            WHERE id = ?
+          `).run(amount, now, existing.id);
+        } else {
+          const tuitionId = crypto.randomUUID();
+          db.prepare(`
+            INSERT INTO student_tuition (id, student_id, total_charged, amount_paid, updated_at, sync_status)
+            VALUES (?, ?, 0.0, ?, ?, 'pending')
+          `).run(tuitionId, studentId, amount, now);
+        }
+      });
+
+      recordTransaction();
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
   });
 
   // Teachers/Admins IPC

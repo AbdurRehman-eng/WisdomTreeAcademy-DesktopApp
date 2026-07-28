@@ -234,6 +234,20 @@ const TABLES_CONFIG = [
     selectQuery:   "SELECT id, question_id, class, subject, text, audio_text, options_json, correct_answer, version_number, changed_by, updated_at FROM question_versions WHERE sync_status = 'pending'",
     markSynced:    "UPDATE question_versions SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, question_id: r.question_id, class: r.class, subject: r.subject, text: r.text, audio_text: r.audio_text, options_json: r.options_json, correct_answer: r.correct_answer, version_number: r.version_number, changed_by: r.changed_by, updated_at: r.updated_at })
+  },
+  {
+    localTable:    'student_tuition',
+    remoteTable:   'student_tuition',
+    selectQuery:   "SELECT id, student_id, total_charged, amount_paid, updated_at FROM student_tuition WHERE sync_status = 'pending'",
+    markSynced:    "UPDATE student_tuition SET sync_status = 'synced' WHERE sync_status = 'pending'",
+    mapRow:        (r) => ({ id: r.id, student_id: r.student_id, total_charged: r.total_charged, amount_paid: r.amount_paid, updated_at: r.updated_at })
+  },
+  {
+    localTable:    'tuition_payments',
+    remoteTable:   'tuition_payments',
+    selectQuery:   "SELECT id, student_id, amount, payment_date, payment_method, notes, updated_at FROM tuition_payments WHERE sync_status = 'pending'",
+    markSynced:    "UPDATE tuition_payments SET sync_status = 'synced' WHERE sync_status = 'pending'",
+    mapRow:        (r) => ({ id: r.id, student_id: r.student_id, amount: r.amount, payment_date: r.payment_date, payment_method: r.payment_method, notes: r.notes, updated_at: r.updated_at })
   }
 ];
 
@@ -255,6 +269,12 @@ function getRowDisplayName(table, row) {
   }
   if (table === 'question_versions') {
     return `Question Version ${row.version_number}`;
+  }
+  if (table === 'student_tuition') {
+    return `Tuition Summary (Charged: ${row.total_charged})`;
+  }
+  if (table === 'tuition_payments') {
+    return `Tuition Payment (${row.amount})`;
   }
   return row.id;
 }
