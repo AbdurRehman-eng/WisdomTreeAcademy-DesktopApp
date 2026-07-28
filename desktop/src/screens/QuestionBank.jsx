@@ -62,7 +62,7 @@ export const QuestionBank = () => {
         id: q.id,
         grade: q.class,
         subject: q.subject,
-        difficulty: 'Medium', // Fallback
+        difficulty: q.difficulty || 'Medium',
         text: q.text,
         options: q.options,
         correct: q.correct_answer,
@@ -138,6 +138,7 @@ export const QuestionBank = () => {
     const newQ = {
       class: formGrade,
       subject: formSubject,
+      difficulty: formDifficulty,
       text: newQuestionText,
       audioText: newQuestionText,
       options: [optA, optB, optC, optD],
@@ -161,6 +162,7 @@ export const QuestionBank = () => {
         setOptC('');
         setOptD('');
         setCorrectOpt('A');
+        setFormDifficulty('Medium');
         setHasRecordedAudio(false);
         setImagePath('');
       } else {

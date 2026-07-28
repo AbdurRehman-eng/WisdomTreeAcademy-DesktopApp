@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS question_bank (
     audio_text TEXT,
     options_json TEXT NOT NULL, -- JSON array of MCQ options
     correct_answer TEXT NOT NULL,
+    difficulty TEXT DEFAULT 'Medium',
     approval_status TEXT DEFAULT 'approved', -- 'approved', 'pending_approval'
     status TEXT DEFAULT 'active', -- 'active', 'archived', 'deleted'
     sync_status TEXT DEFAULT 'synced',
@@ -111,6 +112,7 @@ CREATE TABLE IF NOT EXISTS question_versions (
     audio_text TEXT,
     options_json TEXT NOT NULL,
     correct_answer TEXT NOT NULL,
+    difficulty TEXT DEFAULT 'Medium',
     version_number INTEGER NOT NULL,
     changed_by TEXT NOT NULL,
     sync_status TEXT DEFAULT 'pending',

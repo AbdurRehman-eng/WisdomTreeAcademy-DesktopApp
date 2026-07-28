@@ -203,9 +203,9 @@ const TABLES_CONFIG = [
   {
     localTable:    'question_bank',
     remoteTable:   'question_bank',
-    selectQuery:   "SELECT id, class, subject, text, audio_text, options_json, correct_answer, image_path, approval_status, status, updated_at FROM question_bank WHERE sync_status = 'pending'",
+    selectQuery:   "SELECT id, class, subject, text, audio_text, options_json, correct_answer, image_path, difficulty, approval_status, status, updated_at FROM question_bank WHERE sync_status = 'pending'",
     markSynced:    "UPDATE question_bank SET sync_status = 'synced' WHERE sync_status = 'pending'",
-    mapRow:        (r) => ({ id: r.id, class: r.class, subject: r.subject, text: r.text, audio_text: r.audio_text, options_json: r.options_json, correct_answer: r.correct_answer, image_path: r.image_path, approval_status: r.approval_status, status: r.status, updated_at: r.updated_at })
+    mapRow:        (r) => ({ id: r.id, class: r.class, subject: r.subject, text: r.text, audio_text: r.audio_text, options_json: r.options_json, correct_answer: r.correct_answer, image_path: r.image_path, difficulty: r.difficulty, approval_status: r.approval_status, status: r.status, updated_at: r.updated_at })
   },
   {
     localTable:    'assessments',

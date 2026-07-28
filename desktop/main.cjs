@@ -69,6 +69,9 @@ function initDatabase() {
   if (!qColNames.includes('approval_status')) {
     db.prepare("ALTER TABLE question_bank ADD COLUMN approval_status TEXT DEFAULT 'approved'").run();
   }
+  if (!qColNames.includes('difficulty')) {
+    db.prepare("ALTER TABLE question_bank ADD COLUMN difficulty TEXT DEFAULT 'Medium'").run();
+  }
   // Initialize existing questions to 'approved'
   try {
     db.prepare("UPDATE question_bank SET approval_status = 'approved' WHERE approval_status IS NULL").run();
@@ -99,12 +102,18 @@ function initDatabase() {
       audio_text TEXT,
       options_json TEXT NOT NULL,
       correct_answer TEXT NOT NULL,
+      difficulty TEXT DEFAULT 'Medium',
       version_number INTEGER NOT NULL,
       changed_by TEXT NOT NULL,
       sync_status TEXT DEFAULT 'pending',
       updated_at INTEGER NOT NULL
     )
   `).run();
+
+  const qvCols = db.prepare("PRAGMA table_info(question_versions)").all();
+  if (!qvCols.some(c => c.name === 'difficulty')) {
+    db.prepare("ALTER TABLE question_versions ADD COLUMN difficulty TEXT DEFAULT 'Medium'").run();
+  }
 
   // Create student_tuition table
   db.prepare(`
@@ -608,10 +617,11 @@ function registerIpcHandlers() {
     }));
   });
   ipcMain.handle('db:save-question', (event, q) => {
-    const { id, class: cls, subject, text, audioText, options, correct_answer, image_path, currentUserId, currentUserRole } = q;
+    const { id, class: cls, subject, text, audioText, options, correct_answer, image_path, difficulty, currentUserId, currentUserRole } = q;
     const now = Date.now();
     const idToUse = id || crypto.randomUUID();
     const optionsJson = JSON.stringify(options);
+    const targetDifficulty = difficulty || 'Medium';
 
     // Determine target approval status.
     // If it's a new question or updated by a teacher, it goes to 'pending_approval'.
@@ -622,8 +632,8 @@ function registerIpcHandlers() {
     }
 
     db.prepare(`
-      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, approval_status, status, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
+      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, difficulty, approval_status, status, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
       ON CONFLICT(id) DO UPDATE SET
         class = excluded.class,
         subject = excluded.subject,
@@ -632,10 +642,11 @@ function registerIpcHandlers() {
         options_json = excluded.options_json,
         correct_answer = excluded.correct_answer,
         image_path = excluded.image_path,
+        difficulty = excluded.difficulty,
         approval_status = excluded.approval_status,
         sync_status = 'pending',
         updated_at = excluded.updated_at
-    `).run(idToUse, cls, subject, text, audioText, optionsJson, correct_answer, image_path || null, approvalStatus, now);
+    `).run(idToUse, cls, subject, text, audioText, optionsJson, correct_answer, image_path || null, targetDifficulty, approvalStatus, now);
 
     // Determine version number
     let versionNum = 1;
@@ -646,9 +657,9 @@ function registerIpcHandlers() {
 
     // Insert version history
     db.prepare(`
-      INSERT INTO question_versions (id, question_id, class, subject, text, audio_text, options_json, correct_answer, version_number, changed_by, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
-    `).run(crypto.randomUUID(), idToUse, cls, subject, text, audioText || '', optionsJson, correct_answer, versionNum, currentUserId || 'unknown', now);
+      INSERT INTO question_versions (id, question_id, class, subject, text, audio_text, options_json, correct_answer, difficulty, version_number, changed_by, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+    `).run(crypto.randomUUID(), idToUse, cls, subject, text, audioText || '', optionsJson, correct_answer, targetDifficulty, versionNum, currentUserId || 'unknown', now);
 
     writeAuditLog(currentUserId || 'unknown', 'SAVE_QUESTION', `Saved version ${versionNum} of question "${text.substring(0, 30)}..." (${approvalStatus})`);
     return { success: true, id: idToUse };
