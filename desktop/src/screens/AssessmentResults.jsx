@@ -101,10 +101,10 @@ export const AssessmentResults = () => {
         const percent = row.total_questions > 0 ? Math.round((row.score / row.total_questions) * 100) : 0;
         let tier = 'Below Expectations';
         let variant = 'warning';
-        if (percent >= 80) {
+        if (percent >= 90) {
           tier = 'Exceeded Expectations';
           variant = 'success';
-        } else if (percent >= 50) {
+        } else if (percent >= 60) {
           tier = 'Met Expectations';
           variant = 'primary';
         }
@@ -130,6 +130,81 @@ export const AssessmentResults = () => {
   const detailsPercent = selectedAssessment && selectedAssessment.total_questions > 0
     ? Math.round((selectedAssessment.score / selectedAssessment.total_questions) * 100)
     : 0;
+
+  const getDiagnosticSummary = (responses) => {
+    const categories = {
+      'Numeracy & Early Math': { correct: 0, total: 0 },
+      'Phonics & Language Arts': { correct: 0, total: 0 },
+      'Visual & Shape Recognition': { correct: 0, total: 0 },
+      'General Comprehension': { correct: 0, total: 0 }
+    };
+
+    responses.forEach(r => {
+      const text = (r.questionText || '').toLowerCase();
+      let cat = 'General Comprehension';
+      
+      if (
+        text.includes('count') || text.includes('number') || text.includes('math') || 
+        text.includes('add') || text.includes('subtract') || text.includes('sum') || 
+        text.includes('geometry') || text.includes('shape') || text.includes('triangle') || 
+        text.includes('circle') || text.includes('square') || text.includes('rectangle') || 
+        text.includes('plus') || text.includes('minus') || text.includes('equals') || 
+        text.includes('digit') || text.includes('numer')
+      ) {
+        cat = 'Numeracy & Early Math';
+      } else if (
+        text.includes('word') || text.includes('letter') || text.includes('spelling') || 
+        text.includes('alphabet') || text.includes('phonics') || text.includes('rhyme') || 
+        text.includes('read') || text.includes('sound') || text.includes('vowel') || 
+        text.includes('consonant') || text.includes('sentence') || text.includes('grammar')
+      ) {
+        cat = 'Phonics & Language Arts';
+      } else if (
+        text.includes('color') || text.includes('picture') || text.includes('look') || 
+        text.includes('match') || text.includes('find') || text.includes('identify') || 
+        text.includes('spot') || text.includes('difference') || text.includes('pattern') || 
+        text.includes('visual')
+      ) {
+        cat = 'Visual & Shape Recognition';
+      }
+
+      const isCorrect = (() => {
+        if (r.isCorrect !== undefined) return r.isCorrect === true || r.isCorrect === 'true';
+        if (r.is_correct !== undefined) return r.is_correct === true || r.is_correct === 'true';
+        if (r.correct !== undefined) {
+          if (typeof r.correct === 'boolean') return r.correct;
+          if (r.correct === 'true') return true;
+          if (r.correct === 'false') return false;
+        }
+        const sel = r.selectedAnswer || r.selected_answer;
+        const cor = r.correctAnswer || r.correct_answer;
+        if (sel !== undefined && cor !== undefined) {
+          return String(sel).trim().toLowerCase() === String(cor).trim().toLowerCase();
+        }
+        return false;
+      })();
+
+      categories[cat].total += 1;
+      if (isCorrect) {
+        categories[cat].correct += 1;
+      }
+    });
+
+    const strengths = [];
+    const weaknesses = [];
+
+    Object.entries(categories).forEach(([catName, stats]) => {
+      if (stats.total === 0) return;
+      const scorePct = Math.round((stats.correct / stats.total) * 100);
+      if (scorePct >= 75) {
+        strengths.push({ name: catName, pct: scorePct });
+      } else {
+        weaknesses.push({ name: catName, pct: scorePct });
+      }
+    });
+
+    return { strengths, weaknesses };
+  };
 
   return (
     <div className="page-container fade-in">
@@ -207,16 +282,53 @@ export const AssessmentResults = () => {
                 <span>{selectedAssessment.student_class}</span>
               </div>
               <div>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase' }}>Assessed Subject</span>
+                <strong>{(detailsResponses.length > 0 ? detailsResponses[0].subject : null) || 'General'}</strong>
+              </div>
+              <div>
                 <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase' }}>Assessed Date</span>
                 <span>{selectedAssessment.date}</span>
               </div>
               <div>
                 <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase' }}>Score / Rating</span>
                 <strong style={{ 
-                  color: detailsPercent >= 80 ? 'var(--color-success)' : detailsPercent >= 50 ? 'var(--color-warning)' : 'var(--color-error)' 
+                  color: detailsPercent >= 90 ? 'var(--color-success)' : detailsPercent >= 60 ? 'var(--color-warning)' : 'var(--color-error)' 
                 }}>
                   {selectedAssessment.score}/{selectedAssessment.total_questions} ({detailsPercent}%)
                 </strong>
+              </div>
+            </div>
+
+            {/* Diagnostic Focus & Learning Interventions */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+              <div style={{ padding: '16px', background: 'rgba(34, 197, 94, 0.05)', border: '1px solid rgba(34, 197, 94, 0.2)', borderRadius: '8px' }}>
+                <h4 style={{ color: '#16a34a', margin: '0 0 8px 0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>🟢 Core Strengths</h4>
+                {getDiagnosticSummary(detailsResponses).strengths.length > 0 ? (
+                  <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: 'var(--text-primary)' }}>
+                    {getDiagnosticSummary(detailsResponses).strengths.map((s, i) => (
+                      <li key={i} style={{ marginBottom: '4px' }}>
+                        <strong>{s.name} ({s.pct}%)</strong>: Good comprehension and concept mastery.
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <span style={{ fontSize: '12px', fontStyle: 'italic', color: 'var(--text-secondary)' }}>No areas reached the 75% mastery criterion in this session.</span>
+                )}
+              </div>
+              
+              <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.2)', borderRadius: '8px' }}>
+                <h4 style={{ color: '#dc2626', margin: '0 0 8px 0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>🔴 Focus Areas & Recommended Interventions</h4>
+                {getDiagnosticSummary(detailsResponses).weaknesses.length > 0 ? (
+                  <ul style={{ margin: 0, paddingLeft: '18px', fontSize: '12px', color: 'var(--text-primary)' }}>
+                    {getDiagnosticSummary(detailsResponses).weaknesses.map((w, i) => (
+                      <li key={i} style={{ marginBottom: '4px' }}>
+                        <strong>{w.name} ({w.pct}%)</strong>: Needs guided exercises and teacher support.
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <strong style={{ fontSize: '12px', color: '#16a34a' }}>Outstanding! All assessed categories are mastered.</strong>
+                )}
               </div>
             </div>
 

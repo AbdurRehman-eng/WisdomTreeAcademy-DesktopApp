@@ -257,6 +257,16 @@ export const QuestionBank = () => {
     if (lines.length < 2) return [];
     // Skip header row (index 0)
     const rows = [];
+    const parseOption = (val) => {
+      if (!val) return '';
+      try {
+        if (val.startsWith('{') && val.endsWith('}')) {
+          return JSON.parse(val);
+        }
+      } catch (_) {}
+      return val;
+    };
+
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
@@ -277,16 +287,17 @@ export const QuestionBank = () => {
       }
       cols.push(current.trim());
       if (cols.length < 8) continue; // skip malformed rows
-      const [cls, subject, text, option_a, option_b, option_c, option_d, correct_answer, audio_text] = cols;
+      const [cls, subject, text, option_a, option_b, option_c, option_d, correct_answer, audio_text, difficulty] = cols;
       const correctUpper = correct_answer?.toUpperCase();
       if (!['A','B','C','D'].includes(correctUpper)) continue;
       rows.push({
         class: cls,
         subject,
         text,
-        options: [option_a, option_b, option_c, option_d],
+        options: [parseOption(option_a), parseOption(option_b), parseOption(option_c), parseOption(option_d)],
         correct: correctUpper,
-        audioText: audio_text || text
+        audioText: audio_text || text,
+        difficulty: difficulty || 'Medium'
       });
     }
     return rows;

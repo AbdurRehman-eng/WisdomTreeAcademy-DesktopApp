@@ -683,18 +683,19 @@ function registerIpcHandlers() {
   ipcMain.handle('db:import-questions', (event, questions, currentUserId) => {
     const now = Date.now();
     const insert = db.prepare(`
-      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, approval_status, status, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'active', 'pending', ?)
+      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, difficulty, approval_status, status, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'active', 'pending', ?)
     `);
     const insertVersion = db.prepare(`
-      INSERT INTO question_versions (id, question_id, class, subject, text, audio_text, options_json, correct_answer, version_number, changed_by, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'pending', ?)
+      INSERT INTO question_versions (id, question_id, class, subject, text, audio_text, options_json, correct_answer, difficulty, version_number, changed_by, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, 'pending', ?)
     `);
     
     const transaction = db.transaction((list) => {
       for (const q of list) {
         const qId = q.id || crypto.randomUUID();
         const optsJson = JSON.stringify(q.options);
+        const diff = q.difficulty || 'Medium';
         insert.run(
           qId,
           q.class,
@@ -704,6 +705,7 @@ function registerIpcHandlers() {
           optsJson,
           q.correct,
           q.image_path || null,
+          diff,
           now
         );
         insertVersion.run(
@@ -715,6 +717,7 @@ function registerIpcHandlers() {
           q.audioText || '',
           optsJson,
           q.correct,
+          diff,
           currentUserId || 'unknown',
           now
         );
@@ -1183,7 +1186,7 @@ function registerIpcHandlers() {
     if (!filePath) return { success: false, error: 'Cancelled' };
     try {
       const questions = db.prepare("SELECT * FROM question_bank WHERE status = 'active'").all();
-      let csvContent = 'id,class,subject,text,audio_text,options,correct_answer,image_path\n';
+      let csvContent = 'id,class,subject,text,audio_text,options,correct_answer,image_path,difficulty\n';
       const escapeCSV = (str) => {
         if (str === null || str === undefined) return '';
         const s = String(str).replace(/"/g, '""');
@@ -1196,8 +1199,8 @@ function registerIpcHandlers() {
         } catch (e) {
           opts = [];
         }
-        const optionsStr = opts.join('|');
-        csvContent += `${escapeCSV(q.id)},${escapeCSV(q.class)},${escapeCSV(q.subject)},${escapeCSV(q.text)},${escapeCSV(q.audio_text)},${escapeCSV(optionsStr)},${escapeCSV(q.correct_answer)},${escapeCSV(q.image_path)}\n`;
+        const optionsStr = opts.map(o => typeof o === 'object' ? JSON.stringify(o) : o).join('|');
+        csvContent += `${escapeCSV(q.id)},${escapeCSV(q.class)},${escapeCSV(q.subject)},${escapeCSV(q.text)},${escapeCSV(q.audio_text)},${escapeCSV(optionsStr)},${escapeCSV(q.correct_answer)},${escapeCSV(q.image_path)},${escapeCSV(q.difficulty || 'Medium')}\n`;
       }
       fs.writeFileSync(filePath, csvContent, 'utf8');
       return { success: true };

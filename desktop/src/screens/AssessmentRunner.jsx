@@ -62,17 +62,29 @@ export const AssessmentRunner = () => {
           correct: q.options[String(q.correct_answer).charCodeAt(0) - 65] || q.correct_answer, // resolve option index/value
           correctLetter: q.correct_answer,
           audioText: q.audio_text || q.text,
-          image_path: q.image_path
+          image_path: q.image_path,
+          subject: q.subject || activeAssessment.subject,
+          class: q.class || activeAssessment.class
         }));
 
         if (filtered.length > 0) {
           setQuestions(filtered);
         } else {
           // If no questions match class and subject, use child-focused fallback questions
-          setQuestions(fallbackQuestions);
+          const fallbackWithMeta = fallbackQuestions.map(f => ({
+            ...f,
+            subject: activeAssessment.subject,
+            class: activeAssessment.class
+          }));
+          setQuestions(fallbackWithMeta);
         }
       } else {
-        setQuestions(fallbackQuestions);
+        const fallbackWithMeta = fallbackQuestions.map(f => ({
+          ...f,
+          subject: activeAssessment.subject,
+          class: activeAssessment.class
+        }));
+        setQuestions(fallbackWithMeta);
       }
     };
 
