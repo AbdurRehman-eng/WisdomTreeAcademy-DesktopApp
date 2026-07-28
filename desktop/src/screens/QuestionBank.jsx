@@ -28,6 +28,10 @@ export const QuestionBank = () => {
   const [formSubject, setFormSubject] = useState('');
   const [formDifficulty, setFormDifficulty] = useState('Medium');
   const [imagePath, setImagePath] = useState('');
+  const [optAImage, setOptAImage] = useState('');
+  const [optBImage, setOptBImage] = useState('');
+  const [optCImage, setOptCImage] = useState('');
+  const [optDImage, setOptDImage] = useState('');
 
   // Version History Modal states
   const [isVersionModalOpen, setIsVersionModalOpen] = useState(false);
@@ -87,6 +91,21 @@ export const QuestionBank = () => {
     }
   };
 
+  const handleSelectChoiceImage = async (letter) => {
+    if (window.api) {
+      const res = await window.api.selectImage();
+      if (res.success) {
+        if (letter === 'A') setOptAImage(res.dataUrl);
+        else if (letter === 'B') setOptBImage(res.dataUrl);
+        else if (letter === 'C') setOptCImage(res.dataUrl);
+        else if (letter === 'D') setOptDImage(res.dataUrl);
+        showToast(`Option ${letter} image attached successfully.`, 'success');
+      } else if (res.error && res.error !== 'Cancelled') {
+        showToast(`Option image selection failed: ${res.error}`, 'error');
+      }
+    }
+  };
+
   useEffect(() => {
     const loadSetupData = async () => {
       if (window.api) {
@@ -141,7 +160,12 @@ export const QuestionBank = () => {
       difficulty: formDifficulty,
       text: newQuestionText,
       audioText: newQuestionText,
-      options: [optA, optB, optC, optD],
+      options: [
+        optAImage ? { text: optA, image_path: optAImage } : optA,
+        optBImage ? { text: optB, image_path: optBImage } : optB,
+        optCImage ? { text: optC, image_path: optCImage } : optC,
+        optDImage ? { text: optD, image_path: optDImage } : optD
+      ],
       correct_answer: correctOpt,
       image_path: imagePath || null,
       currentUserId: user?.id
@@ -161,6 +185,10 @@ export const QuestionBank = () => {
         setOptB('');
         setOptC('');
         setOptD('');
+        setOptAImage('');
+        setOptBImage('');
+        setOptCImage('');
+        setOptDImage('');
         setCorrectOpt('A');
         setFormDifficulty('Medium');
         setHasRecordedAudio(false);
@@ -457,10 +485,21 @@ export const QuestionBank = () => {
                     {q.options.map((opt, oIdx) => {
                       const letter = String.fromCharCode(65 + oIdx);
                       const isCorrect = letter === q.correct;
+                      const hasImage = opt && typeof opt === 'object' && opt.image_path;
+                      const textVal = opt && typeof opt === 'object' ? opt.text : opt;
+                      const imageVal = opt && typeof opt === 'object' ? opt.image_path : null;
+
                       return (
-                        <div key={oIdx} className={`qp-mcq-option ${isCorrect ? 'correct' : ''}`}>
-                          <span className="qp-option-letter">{letter}</span>
-                          <span className="qp-option-text">{opt}</span>
+                        <div key={oIdx} className={`qp-mcq-option ${isCorrect ? 'correct' : ''} ${hasImage ? 'has-image' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center', padding: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '8px' }}>
+                            <span className="qp-option-letter">{letter}</span>
+                            <span className="qp-option-text">{textVal}</span>
+                          </div>
+                          {hasImage && (
+                            <div className="qp-option-image-container" style={{ width: '100%', maxHeight: '100px', borderRadius: '4px', overflow: 'hidden', border: '1px solid var(--border-color)', display: 'flex', justifyContent: 'center', background: 'var(--bg-secondary)', marginTop: '4px' }}>
+                              <img src={imageVal} alt={`Choice ${letter}`} style={{ maxWidth: '100%', maxHeight: '100px', objectFit: 'contain' }} />
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -574,22 +613,77 @@ export const QuestionBank = () => {
           {/* Multiple choice inputs */}
           <div className="form-group">
             <label className="form-label">Multiple Choice (MCQ) Choices</label>
-            <div className="qb-choices-form-grid">
-              <div className="choice-input-item">
-                <span className="choice-marker">A</span>
-                <input type="text" className="form-input" placeholder="Option A text" value={optA} onChange={(e) => setOptA(e.target.value)} />
+            <div className="qb-choices-form-grid" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div className="choice-input-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }}>
+                  <span className="choice-marker">A</span>
+                  <input type="text" className="form-input" style={{ flex: 1 }} placeholder="Option A text" value={optA} onChange={(e) => setOptA(e.target.value)} />
+                  <button type="button" className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '11px', whiteSpace: 'nowrap' }} onClick={() => handleSelectChoiceImage('A')}>
+                    {optAImage ? '📷 Change Image' : '📷 Add Image'}
+                  </button>
+                </div>
+                {optAImage && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '30px', marginTop: '4px' }}>
+                    <img src={optAImage} alt="Option A thumbnail" style={{ width: '36px', height: '36px', objectFit: 'contain', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
+                    <button type="button" style={{ color: 'var(--color-error, #ef4444)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', padding: 0 }} onClick={() => setOptAImage('')}>
+                      Remove Choice Image
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="choice-input-item">
-                <span className="choice-marker">B</span>
-                <input type="text" className="form-input" placeholder="Option B text" value={optB} onChange={(e) => setOptB(e.target.value)} />
+
+              <div className="choice-input-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }}>
+                  <span className="choice-marker">B</span>
+                  <input type="text" className="form-input" style={{ flex: 1 }} placeholder="Option B text" value={optB} onChange={(e) => setOptB(e.target.value)} />
+                  <button type="button" className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '11px', whiteSpace: 'nowrap' }} onClick={() => handleSelectChoiceImage('B')}>
+                    {optBImage ? '📷 Change Image' : '📷 Add Image'}
+                  </button>
+                </div>
+                {optBImage && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '30px', marginTop: '4px' }}>
+                    <img src={optBImage} alt="Option B thumbnail" style={{ width: '36px', height: '36px', objectFit: 'contain', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
+                    <button type="button" style={{ color: 'var(--color-error, #ef4444)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', padding: 0 }} onClick={() => setOptBImage('')}>
+                      Remove Choice Image
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="choice-input-item">
-                <span className="choice-marker">C</span>
-                <input type="text" className="form-input" placeholder="Option C text" value={optC} onChange={(e) => setOptC(e.target.value)} />
+
+              <div className="choice-input-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }}>
+                  <span className="choice-marker">C</span>
+                  <input type="text" className="form-input" style={{ flex: 1 }} placeholder="Option C text" value={optC} onChange={(e) => setOptC(e.target.value)} />
+                  <button type="button" className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '11px', whiteSpace: 'nowrap' }} onClick={() => handleSelectChoiceImage('C')}>
+                    {optCImage ? '📷 Change Image' : '📷 Add Image'}
+                  </button>
+                </div>
+                {optCImage && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '30px', marginTop: '4px' }}>
+                    <img src={optCImage} alt="Option C thumbnail" style={{ width: '36px', height: '36px', objectFit: 'contain', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
+                    <button type="button" style={{ color: 'var(--color-error, #ef4444)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', padding: 0 }} onClick={() => setOptCImage('')}>
+                      Remove Choice Image
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="choice-input-item">
-                <span className="choice-marker">D</span>
-                <input type="text" className="form-input" placeholder="Option D text" value={optD} onChange={(e) => setOptD(e.target.value)} />
+
+              <div className="choice-input-item" style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingBottom: '4px' }}>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%' }}>
+                  <span className="choice-marker">D</span>
+                  <input type="text" className="form-input" style={{ flex: 1 }} placeholder="Option D text" value={optD} onChange={(e) => setOptD(e.target.value)} />
+                  <button type="button" className="btn btn-secondary" style={{ padding: '6px 10px', fontSize: '11px', whiteSpace: 'nowrap' }} onClick={() => handleSelectChoiceImage('D')}>
+                    {optDImage ? '📷 Change Image' : '📷 Add Image'}
+                  </button>
+                </div>
+                {optDImage && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginLeft: '30px', marginTop: '4px' }}>
+                    <img src={optDImage} alt="Option D thumbnail" style={{ width: '36px', height: '36px', objectFit: 'contain', border: '1px solid var(--border-color)', borderRadius: '4px' }} />
+                    <button type="button" style={{ color: 'var(--color-error, #ef4444)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '11px', padding: 0 }} onClick={() => setOptDImage('')}>
+                      Remove Choice Image
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>

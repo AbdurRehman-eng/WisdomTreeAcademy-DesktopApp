@@ -4,6 +4,8 @@ import { useApp } from '../context/AppContext';
 import AudioControl from '../components/common/AudioControl';
 import { X, Star, ArrowRight, Award, RotateCcw } from 'lucide-react';
 
+const getOptionText = (opt) => opt && typeof opt === 'object' ? opt.text : opt;
+
 export const AssessmentRunner = () => {
   const { setScreen, showToast, activeAssessment, refreshSyncInfo } = useApp();
 
@@ -18,25 +20,25 @@ export const AssessmentRunner = () => {
   // Child-focused fallback questions if DB has no questions matching class/subject
   const fallbackQuestions = [
     {
-      id: 'CQ1',
-      text: 'Which animal makes the "meow" sound?',
+      id: 'f1',
+      text: 'Which animal makes a "Meow" sound?',
       options: ['Dog', 'Cat', 'Lion', 'Cow'],
       correct: 'Cat',
-      audioText: 'Let’s look at the animals. Which animal makes the meow sound? Is it the Dog, the Cat, the Lion, or the Cow? Tap the right one!'
+      audioText: 'Which animal makes a Meow sound?'
     },
     {
-      id: 'CQ2',
-      text: 'What is the color of the sun?',
-      options: ['Blue', 'Green', 'Yellow', 'Purple'],
+      id: 'f2',
+      text: 'What color is the sun?',
+      options: ['Red', 'Blue', 'Yellow', 'Green'],
       correct: 'Yellow',
-      audioText: 'Look up in the sky! What is the color of the sun? Is it Blue, Green, Yellow, or Purple? Choose the color of the sun.'
+      audioText: 'What color is the sun?'
     },
     {
-      id: 'CQ3',
-      text: 'How many fingers do you have on one hand?',
-      options: ['Three', 'Four', 'Five', 'Ten'],
+      id: 'f3',
+      text: 'Count the apples: 🍎🍎🍎🍎🍎. How many?',
+      options: ['Three', 'Four', 'Five', 'Six'],
       correct: 'Five',
-      audioText: 'Let’s count our fingers! How many fingers do you have on one hand? Three, Four, Five, or Ten? Show me on your hand!'
+      audioText: 'Count the apples. How many?'
     }
   ];
 
@@ -100,7 +102,7 @@ export const AssessmentRunner = () => {
   };
 
   const handleNext = async () => {
-    const isCorrect = selectedAnswer === activeQuestion.correct;
+    const isCorrect = getOptionText(selectedAnswer) === getOptionText(activeQuestion.correct);
     const newCorrectCount = isCorrect ? correctAnswersCount + 1 : correctAnswersCount;
     
     if (isCorrect) {
@@ -110,8 +112,8 @@ export const AssessmentRunner = () => {
     const newResponse = {
       questionId: activeQuestion.id,
       questionText: activeQuestion.text,
-      selectedAnswer: selectedAnswer,
-      correctAnswer: activeQuestion.correct,
+      selectedAnswer: getOptionText(selectedAnswer),
+      correctAnswer: getOptionText(activeQuestion.correct),
       isCorrect: isCorrect,
       subject: activeQuestion.subject,
       class: activeQuestion.class
@@ -218,17 +220,27 @@ export const AssessmentRunner = () => {
               {activeQuestion.options.map((option, idx) => {
                 const isSelected = selectedAnswer === option;
                 const letter = String.fromCharCode(65 + idx);
-                
+                const hasImage = option && typeof option === 'object' && option.image_path;
+                const textVal = option && typeof option === 'object' ? option.text : option;
+                const imageVal = option && typeof option === 'object' ? option.image_path : null;
+
                 return (
                   <button
                     key={idx}
                     onClick={() => handleAnswerSelect(option, idx)}
-                    className={`child-answer-tile option-${idx} ${isSelected ? 'selected' : ''} ${bounceOption === idx ? 'bounce-active' : ''}`}
+                    className={`child-answer-tile option-${idx} ${isSelected ? 'selected' : ''} ${bounceOption === idx ? 'bounce-active' : ''} ${hasImage ? 'has-image' : ''}`}
                   >
-                    <div className="child-tile-letter">{letter}</div>
-                    <span className="child-tile-text">{option}</span>
-                    {isSelected && (
-                      <span className="child-selected-checkmark">✓</span>
+                    <div className="child-tile-header">
+                      <div className="child-tile-letter">{letter}</div>
+                      <span className="child-tile-text">{textVal}</span>
+                      {isSelected && (
+                        <span className="child-selected-checkmark" style={{ marginLeft: 'auto' }}>✓</span>
+                      )}
+                    </div>
+                    {hasImage && (
+                      <div className="child-option-image-container">
+                        <img src={imageVal} alt={`Choice ${letter}`} />
+                      </div>
                     )}
                   </button>
                 );
