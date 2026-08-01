@@ -159,13 +159,6 @@ function initDatabase() {
   } catch (err) {
     console.error("Migration error for attendance index:", err);
   }
-  // Set default seeded accounts to 'pending' sync_status if they are currently set to 'synced'
-  try {
-    db.prepare("UPDATE teachers_admins SET sync_status = 'pending' WHERE username IN ('admin', 'teacher') AND sync_status = 'synced'").run();
-  } catch (err) {
-    console.error("Migration error for default accounts sync status:", err);
-  }
-  
   // Seed initial data if empty
   seedDatabase();
 }
