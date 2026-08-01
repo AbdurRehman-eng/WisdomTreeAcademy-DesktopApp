@@ -22,6 +22,14 @@ import {
 } from 'lucide-react';
 import './TuitionFees.css';
 
+const getLocalDateString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const TuitionFees = () => {
   const { showToast, refreshSyncInfo } = useApp();
 
@@ -30,6 +38,7 @@ export const TuitionFees = () => {
   const [classes, setClasses] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,7 +52,7 @@ export const TuitionFees = () => {
   // Form states
   const [totalChargedInput, setTotalChargedInput] = useState('');
   const [amountInput, setAmountInput] = useState('');
-  const [dateInput, setDateInput] = useState(new Date().toISOString().split('T')[0]);
+  const [dateInput, setDateInput] = useState(getLocalDateString());
   const [methodInput, setMethodInput] = useState('Cash');
   const [notesInput, setNotesInput] = useState('');
 
@@ -164,7 +173,7 @@ export const TuitionFees = () => {
   const handleOpenRecordPayment = () => {
     if (!selectedStudent) return;
     setAmountInput('');
-    setDateInput(new Date().toISOString().split('T')[0]);
+    setDateInput(getLocalDateString());
     setMethodInput('Cash');
     setNotesInput('');
     setIsRecordPaymentOpen(true);

@@ -5,6 +5,14 @@ import Badge from '../components/common/Badge';
 import Button from '../components/common/Button';
 import { Calendar, Check, X, Clock, BarChart3, Save } from 'lucide-react';
 
+const getLocalDateString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const Attendance = () => {
   const { showToast, refreshSyncInfo } = useApp();
   const [classes, setClasses] = useState([]);
@@ -12,7 +20,7 @@ export const Attendance = () => {
   const [students, setStudents] = useState([]);
   const [attendanceState, setAttendanceState] = useState({});
 
-  const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const todayStr = getLocalDateString(); // YYYY-MM-DD
 
   // Load classes on mount
   useEffect(() => {

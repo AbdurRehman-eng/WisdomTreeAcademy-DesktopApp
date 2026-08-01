@@ -22,6 +22,14 @@ const { hashPassword, verifyPassword } = require('./utils/cryptoHelper.cjs');
 const { validateLicenseKey } = require('./utils/licenseHelper.cjs');
 const { pushPendingRecords } = require('./utils/syncHelper.cjs');
 
+function getLocalDateString() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // Database Initialization
 function initDatabase() {
   const dbPath = path.join(app.getPath('userData'), 'wisdom_tree.db');
@@ -830,7 +838,7 @@ function registerIpcHandlers() {
     const now = Date.now();
     const idToUse = id || crypto.randomUUID();
     const resultsJson = JSON.stringify(results);
-    const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const dateStr = getLocalDateString(); // YYYY-MM-DD
     
     db.prepare(`
       INSERT INTO assessments (id, student_id, score, total_questions, results_json, date, sync_status, updated_at)
@@ -1006,7 +1014,7 @@ function registerIpcHandlers() {
       const classCount = db.prepare("SELECT count(*) as count FROM classes WHERE status = 'active'").get().count;
       const assessmentCount = db.prepare("SELECT count(*) as count FROM assessments").get().count;
 
-      const todayStr = new Date().toISOString().split('T')[0];
+      const todayStr = getLocalDateString();
       const todayAttendance = db.prepare("SELECT status, count(*) as count FROM attendance WHERE date = ? AND type = 'student' GROUP BY status").all(todayStr);
       let todayAttendanceRate = 'Pending';
       if (todayAttendance.length > 0) {
