@@ -78,9 +78,10 @@ describe('Sync Conflict Resolution Tests', () => {
     // Verify SQL prepared statement and correct values are passed to local database run
     expect(db.runCalls.length).toBe(1);
     const call = db.runCalls[0];
-    expect(call.sql).toContain('INSERT OR REPLACE INTO students');
-    expect(call.sql).toContain('sync_status');
+    expect(call.sql).toContain('UPDATE students SET');
+    expect(call.sql).toContain('sync_status = ?');
     expect(call.args).toContain('Remote Name');
     expect(call.args).toContain('synced');
+    expect(call.args).toContain('S101');
   });
 });

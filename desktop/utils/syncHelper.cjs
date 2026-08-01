@@ -441,12 +441,11 @@ async function resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts) {
         const remoteRow = result.rows[0];
         const mappedRemote = cfg.mapRow(remoteRow);
 
-        const keys = Object.keys(mappedRemote);
-        const columns = [...keys, 'sync_status'];
-        const placeholders = columns.map(() => '?').join(', ');
-        const values = [...keys.map(k => mappedRemote[k]), 'synced'];
+        const keys = Object.keys(mappedRemote).filter(k => k !== 'id');
+        const setClauses = keys.map(k => `${k} = ?`).join(', ');
+        const values = [...keys.map(k => mappedRemote[k]), 'synced', conflict.id];
 
-        const sql = `INSERT OR REPLACE INTO ${cfg.localTable} (${columns.join(', ')}) VALUES (${placeholders})`;
+        const sql = `UPDATE ${cfg.localTable} SET ${setClauses}, sync_status = ? WHERE id = ?`;
         db.prepare(sql).run(...values);
       }
     } catch (err) {
