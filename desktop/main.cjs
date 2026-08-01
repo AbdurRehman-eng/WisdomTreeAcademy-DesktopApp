@@ -1211,6 +1211,32 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('db:reset', async () => {
+    try {
+      if (db) {
+        db.close();
+      }
+      const dbPath = path.join(app.getPath('userData'), 'wisdom_tree.db');
+      const walPath = `${dbPath}-wal`;
+      const shmPath = `${dbPath}-shm`;
+
+      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+      if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+      if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+
+      initDatabase();
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      try {
+        const dbPath = path.join(app.getPath('userData'), 'wisdom_tree.db');
+        db = new Database(dbPath);
+        db.pragma('journal_mode = WAL');
+      } catch (_) {}
+      return { success: false, error: e.message };
+    }
+  });
+
   ipcMain.handle('db:export-questions', async () => {
     const { dialog } = require('electron');
     const { filePath } = await dialog.showSaveDialog(mainWindow, {

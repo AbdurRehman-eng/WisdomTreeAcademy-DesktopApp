@@ -117,14 +117,32 @@ export const SyncSettings = () => {
     }
   };
 
-  const handleResetData = () => {
+  const handleResetData = async () => {
     const confirmed = window.confirm(
       "WARNING: This will reset the database cache, clear all offline records, and reload the application. This action CANNOT be undone. Are you absolutely sure you want to proceed?"
     );
     if (!confirmed) return;
 
-    showToast('Resetting database defaults... Cache cleared.', 'success');
-    window.location.reload();
+    try {
+      if (window.api?.resetDatabase) {
+        const res = await window.api.resetDatabase();
+        if (res.success) {
+          showToast('Resetting database defaults... Cache cleared.', 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        } else {
+          showToast(res.error || 'Failed to reset database.', 'error');
+        }
+      } else {
+        showToast('Database reset simulated (web preview mode).', 'info');
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   };
 
   const handleActivateLicense = async () => {
