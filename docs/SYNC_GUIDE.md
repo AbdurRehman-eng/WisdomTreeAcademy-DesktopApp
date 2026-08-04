@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS question_bank (
   options_json TEXT,
   correct_answer TEXT,
   image_path TEXT,
+  difficulty TEXT DEFAULT 'Medium',
   status TEXT DEFAULT 'active',
   updated_at BIGINT
 );
@@ -104,6 +105,26 @@ CREATE TABLE IF NOT EXISTS attendance (
   status TEXT NOT NULL,
   updated_at BIGINT,
   UNIQUE(type, target_id, date)
+);
+
+-- Student Tuition Summaries
+CREATE TABLE IF NOT EXISTS student_tuition (
+  id TEXT PRIMARY KEY,
+  student_id TEXT UNIQUE NOT NULL,
+  total_charged NUMERIC DEFAULT 0.0,
+  amount_paid NUMERIC DEFAULT 0.0,
+  updated_at BIGINT
+);
+
+-- Tuition Payments Ledger
+CREATE TABLE IF NOT EXISTS tuition_payments (
+  id TEXT PRIMARY KEY,
+  student_id TEXT NOT NULL,
+  amount NUMERIC DEFAULT 0.0,
+  payment_date TEXT NOT NULL,
+  payment_method TEXT NOT NULL,
+  notes TEXT,
+  updated_at BIGINT
 );
 ```
 
@@ -142,6 +163,8 @@ The following tables are pushed on each sync:
 - `question_bank` — diagnostic MCQs
 - `assessments` — completed assessment results with scores
 - `attendance` — daily attendance logs
+- `student_tuition` — student tuition summary data
+- `tuition_payments` — detailed payment ledger entries
 
 ---
 
@@ -173,6 +196,8 @@ The following tables are pushed on each sync:
    ALTER TABLE question_bank ENABLE ROW LEVEL SECURITY;
    ALTER TABLE assessments ENABLE ROW LEVEL SECURITY;
    ALTER TABLE attendance ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE student_tuition ENABLE ROW LEVEL SECURITY;
+   ALTER TABLE tuition_payments ENABLE ROW LEVEL SECURITY;
    ```
 
 2. **Create policies** that allow full CRUD (needed for push synchronization upserts and dashboard operations) for the anon and authenticated roles:
@@ -184,6 +209,8 @@ The following tables are pushed on each sync:
    CREATE POLICY "allow_all_operations" ON question_bank FOR ALL TO public USING (true) WITH CHECK (true);
    CREATE POLICY "allow_all_operations" ON assessments FOR ALL TO public USING (true) WITH CHECK (true);
    CREATE POLICY "allow_all_operations" ON attendance FOR ALL TO public USING (true) WITH CHECK (true);
+   CREATE POLICY "allow_all_operations" ON student_tuition FOR ALL TO public USING (true) WITH CHECK (true);
+   CREATE POLICY "allow_all_operations" ON tuition_payments FOR ALL TO public USING (true) WITH CHECK (true);
    ```
 
 3. **Use a service role key** (instead of the anon key) and keep it in a server-side proxy rather than embedding it in the desktop client. This is the recommended V2 architecture.
