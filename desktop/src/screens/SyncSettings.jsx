@@ -246,7 +246,7 @@ export const SyncSettings = () => {
             <Button
               variant="primary"
               onClick={triggerSync}
-              disabled={syncStatus === 'syncing' || pendingSyncCount === 0}
+              disabled={syncStatus === 'syncing'}
               icon={RefreshCw}
               style={{ width: '100%', marginTop: '10px' }}
             >

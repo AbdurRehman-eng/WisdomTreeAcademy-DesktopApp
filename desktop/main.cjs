@@ -3,6 +3,39 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
+const dns = require('dns');
+const url = require('url');
+
+function checkInternet(projectUrl) {
+  return new Promise((resolve) => {
+    let resolved = false;
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve(false);
+      }
+    }, 3000);
+
+    let hostname = 'supabase.co';
+    if (projectUrl) {
+      try {
+        const parsed = url.parse(projectUrl);
+        if (parsed.hostname) {
+          hostname = parsed.hostname;
+        }
+      } catch (_) {}
+    }
+
+    dns.lookup(hostname, (err) => {
+      clearTimeout(timer);
+      if (!resolved) {
+        resolved = true;
+        resolve(!err);
+      }
+    });
+  });
+}
+
 
 // Register custom media scheme for rendering local question images safely
 protocol.registerSchemesAsPrivileged([
@@ -907,10 +940,20 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('sync:toggle-online', () => {
+  ipcMain.handle('sync:toggle-online', async () => {
     try {
       const current = db.prepare("SELECT value FROM settings WHERE key = 'online_status'").get()?.value;
       const nextStatus = current === 'offline' ? 'synced' : 'offline';
+
+      if (nextStatus === 'synced') {
+        const urlRow = db.prepare("SELECT value FROM settings WHERE key = 'sync_endpoint'").get();
+        const projectUrl = urlRow ? urlRow.value : '';
+        const online = await checkInternet(projectUrl);
+        if (!online) {
+          return { success: false, error: 'Cannot go online. No internet connection detected to the cloud sync database.', status: 'offline' };
+        }
+      }
+
       db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', ?)")
         .run(nextStatus);
       return { success: true, status: nextStatus };
@@ -939,6 +982,22 @@ function registerIpcHandlers() {
         db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
         return { success: false, hasConflicts: true, conflicts: result.conflicts };
       } else {
+        // Check if there was a network connection error
+        const isNetworkError = result.errors && result.errors.some(err => 
+          err.includes('ENOTFOUND') || 
+          err.includes('EAI_AGAIN') || 
+          err.includes('ECONNREFUSED') || 
+          err.includes('ETIMEDOUT') || 
+          err.includes('HTTP 0') || 
+          err.includes('timed out') ||
+          err.includes('timeout')
+        );
+
+        if (isNetworkError) {
+          db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'offline')").run();
+          return { success: false, isOffline: true, error: 'No internet connection detected. Switched to Offline Mode.' };
+        }
+
         // Partial sync — stay online but report errors
         db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
         return { success: false, error: result.errors.join('; '), syncedCount: result.syncedCount };

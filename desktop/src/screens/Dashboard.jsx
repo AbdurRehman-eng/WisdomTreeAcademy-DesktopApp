@@ -159,7 +159,7 @@ export const Dashboard = () => {
                   <h3 className="card-title">Local Database Sync Queue</h3>
                   <button
                     onClick={triggerSync}
-                    disabled={syncStatus === 'syncing' || pendingSyncCount === 0}
+                    disabled={syncStatus === 'syncing'}
                     className="sync-now-action-btn"
                   >
                     Sync Now

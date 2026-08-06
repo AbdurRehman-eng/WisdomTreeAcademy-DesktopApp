@@ -112,6 +112,53 @@ function supabaseUpsert(endpoint, apiKey, rows) {
   });
 }
 
+/**
+ * Fetch all records from a remote table.
+ */
+function supabaseFetchAll(endpoint, apiKey) {
+  return new Promise((resolve) => {
+    const parsed = url.parse(endpoint);
+
+    const options = {
+      hostname: parsed.hostname,
+      path:     parsed.path,
+      method:   'GET',
+      headers: {
+        'apikey':         apiKey,
+        'Authorization':  `Bearer ${apiKey}`
+      }
+    };
+
+    const req = https.request(options, (res) => {
+      let body = '';
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          try {
+            const rows = JSON.parse(body);
+            resolve({ ok: true, status: res.statusCode, rows });
+          } catch (e) {
+            resolve({ ok: false, status: res.statusCode, body: 'JSON parse error' });
+          }
+        } else {
+          resolve({ ok: false, status: res.statusCode, body });
+        }
+      });
+    });
+
+    req.on('error', (err) => {
+      resolve({ ok: false, status: 0, body: err.message });
+    });
+
+    req.setTimeout(15000, () => {
+      req.destroy();
+      resolve({ ok: false, status: 0, body: 'Request timed out' });
+    });
+
+    req.end();
+  });
+}
+
 function supabaseGetSetting(baseUrl, apiKey, key) {
   return new Promise((resolve) => {
     const queryUrl = `${baseUrl}/rest/v1/settings?key=eq.${key}&select=value`;
@@ -168,11 +215,12 @@ const TABLES_CONFIG = [
   {
     localTable:    'teachers_admins',
     remoteTable:   'teachers_admins',
-    selectQuery:   "SELECT id, username, role, name, email, phone_number, employee_id, hire_date, assigned_classes_json, assigned_subjects_json, last_login, status, updated_at FROM teachers_admins WHERE sync_status = 'pending'",
+    selectQuery:   "SELECT id, username, password_hash, role, name, email, phone_number, employee_id, hire_date, assigned_classes_json, assigned_subjects_json, last_login, status, updated_at FROM teachers_admins WHERE sync_status = 'pending'",
     markSynced:    "UPDATE teachers_admins SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({
       id: r.id,
       username: r.username,
+      password_hash: r.password_hash,
       role: r.role,
       name: r.name,
       email: r.email,
@@ -231,9 +279,9 @@ const TABLES_CONFIG = [
   {
     localTable:    'question_versions',
     remoteTable:   'question_versions',
-    selectQuery:   "SELECT id, question_id, class, subject, text, audio_text, options_json, correct_answer, version_number, changed_by, updated_at FROM question_versions WHERE sync_status = 'pending'",
+    selectQuery:   "SELECT id, question_id, class, subject, text, audio_text, options_json, correct_answer, difficulty, version_number, changed_by, updated_at FROM question_versions WHERE sync_status = 'pending'",
     markSynced:    "UPDATE question_versions SET sync_status = 'synced' WHERE sync_status = 'pending'",
-    mapRow:        (r) => ({ id: r.id, question_id: r.question_id, class: r.class, subject: r.subject, text: r.text, audio_text: r.audio_text, options_json: r.options_json, correct_answer: r.correct_answer, version_number: r.version_number, changed_by: r.changed_by, updated_at: r.updated_at })
+    mapRow:        (r) => ({ id: r.id, question_id: r.question_id, class: r.class, subject: r.subject, text: r.text, audio_text: r.audio_text, options_json: r.options_json, correct_answer: r.correct_answer, difficulty: r.difficulty, version_number: r.version_number, changed_by: r.changed_by, updated_at: r.updated_at })
   },
   {
     localTable:    'student_tuition',
@@ -384,6 +432,87 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
       const errMsg = `${cfg.remoteTable}: ${err.message}`;
       errors.push(errMsg);
       console.error('[syncHelper] Unexpected error:', errMsg);
+    }
+  }
+
+  // 2.5. Pull Phase (download all records from cloud)
+  for (const cfg of TABLES_CONFIG) {
+    try {
+      const endpoint = `${baseUrl}/rest/v1/${cfg.remoteTable}`;
+      const fetchResult = await supabaseFetchAll(endpoint, apiKey);
+      if (fetchResult.ok && fetchResult.rows) {
+        const tableInfo = db.prepare(`PRAGMA table_info(${cfg.localTable})`).all();
+        const validColumns = new Set(tableInfo.map(c => c.name));
+
+        const insertOrUpdate = db.transaction((rows) => {
+          let pulledCount = 0;
+          for (const remoteRow of rows) {
+            const filteredRow = {};
+            for (const key of Object.keys(remoteRow)) {
+              if (validColumns.has(key)) {
+                let val = remoteRow[key];
+                if (val !== null && typeof val === 'object') {
+                  val = JSON.stringify(val);
+                }
+                filteredRow[key] = val;
+              }
+            }
+
+            const localRow = db.prepare(`SELECT sync_status, updated_at FROM ${cfg.localTable} WHERE id = ?`).get(filteredRow.id);
+            if (!localRow) {
+              const keys = Object.keys(filteredRow);
+              const columns = [...keys, 'sync_status'];
+              const placeholders = columns.map(() => '?').join(', ');
+              const values = [...keys.map(k => filteredRow[k]), 'synced'];
+
+              db.prepare(`
+                INSERT INTO ${cfg.localTable} (${columns.join(', ')})
+                VALUES (${placeholders})
+              `).run(...values);
+              pulledCount++;
+            } else {
+              if (localRow.sync_status === 'pending') {
+                continue;
+              }
+
+              if (cfg.localTable === 'audit_logs') {
+                continue;
+              }
+
+              const hasUpdatedAt = filteredRow.updated_at !== undefined && filteredRow.updated_at !== null;
+              const shouldUpdate = hasUpdatedAt 
+                ? Number(filteredRow.updated_at) > Number(localRow.updated_at)
+                : true;
+
+              if (shouldUpdate) {
+                const keys = Object.keys(filteredRow).filter(k => k !== 'id');
+                if (keys.length === 0) continue;
+                const setClause = keys.map(k => `${k} = ?`).join(', ');
+                const values = [...keys.map(k => filteredRow[k]), 'synced', filteredRow.id];
+
+                db.prepare(`
+                  UPDATE ${cfg.localTable}
+                  SET ${setClause}, sync_status = ?
+                  WHERE id = ?
+                `).run(...values);
+                pulledCount++;
+              }
+            }
+          }
+          return pulledCount;
+        });
+
+        const merged = insertOrUpdate(fetchResult.rows);
+        console.log(`[syncHelper] Pulled ${merged} records from remote ${cfg.remoteTable}`);
+      } else {
+        const errMsg = `Pull ${cfg.remoteTable}: HTTP ${fetchResult.status} — ${fetchResult.body ? fetchResult.body.substring(0, 200) : 'unknown error'}`;
+        errors.push(errMsg);
+        console.error('[syncHelper] Pull error:', errMsg);
+      }
+    } catch (err) {
+      const errMsg = `Pull ${cfg.remoteTable}: ${err.message}`;
+      errors.push(errMsg);
+      console.error('[syncHelper] Pull unexpected error:', errMsg);
     }
   }
 
