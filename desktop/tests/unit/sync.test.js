@@ -23,7 +23,7 @@ vi.mock('better-sqlite3', () => {
             if (sql.includes("SELECT value FROM settings WHERE key = 'school_logo'")) {
               return { value: 'logo.png' };
             }
-            if (sql.includes("SELECT sync_status, updated_at FROM")) {
+            if (sql.includes("SELECT sync_status, updated_at FROM") || sql.includes("SELECT sync_status FROM")) {
               // Simulate row not existing by default, unless targeted
               if (args[0] === 'S101') return { sync_status: 'synced', updated_at: 1000 };
               return null;

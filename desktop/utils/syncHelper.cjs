@@ -458,7 +458,8 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
               }
             }
 
-            const localRow = db.prepare(`SELECT sync_status, updated_at FROM ${cfg.localTable} WHERE id = ?`).get(filteredRow.id);
+            const selectCols = validColumns.has('updated_at') ? 'sync_status, updated_at' : 'sync_status';
+            const localRow = db.prepare(`SELECT ${selectCols} FROM ${cfg.localTable} WHERE id = ?`).get(filteredRow.id);
             if (!localRow) {
               const keys = Object.keys(filteredRow);
               const columns = [...keys, 'sync_status'];
