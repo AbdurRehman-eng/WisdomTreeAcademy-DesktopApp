@@ -8,6 +8,11 @@ const url = require('url');
 
 function checkInternet(projectUrl) {
   return new Promise((resolve) => {
+    if (!projectUrl) {
+      resolve(false);
+      return;
+    }
+
     let resolved = false;
     const timer = setTimeout(() => {
       if (!resolved) {
@@ -16,23 +21,59 @@ function checkInternet(projectUrl) {
       }
     }, 3000);
 
-    let hostname = 'supabase.co';
-    if (projectUrl) {
-      try {
-        const parsed = url.parse(projectUrl);
-        if (parsed.hostname) {
-          hostname = parsed.hostname;
+    try {
+      const parsed = url.parse(projectUrl);
+      const isHttps = parsed.protocol === 'https:';
+      const httpModule = isHttps ? require('https') : require('http');
+      
+      const options = {
+        hostname: parsed.hostname,
+        port: parsed.port || (isHttps ? 443 : 80),
+        path: parsed.path || '/',
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Electron'
         }
-      } catch (_) {}
-    }
+      };
 
-    dns.lookup(hostname, (err) => {
+      const req = httpModule.request(options, (res) => {
+        clearTimeout(timer);
+        if (!resolved) {
+          resolved = true;
+          resolve(true); // Reachable
+        }
+      });
+
+      req.on('error', (err) => {
+        clearTimeout(timer);
+        if (!resolved) {
+          resolved = true;
+          const offlineErrors = ['ENOTFOUND', 'ETIMEDOUT', 'EHOSTUNREACH', 'ECONNREFUSED'];
+          if (err.code && offlineErrors.includes(err.code)) {
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        }
+      });
+
+      req.setTimeout(2500, () => {
+        req.destroy();
+        clearTimeout(timer);
+        if (!resolved) {
+          resolved = true;
+          resolve(false);
+        }
+      });
+
+      req.end();
+    } catch (_) {
       clearTimeout(timer);
       if (!resolved) {
         resolved = true;
-        resolve(!err);
+        resolve(false);
       }
-    });
+    }
   });
 }
 

@@ -131,7 +131,7 @@ export const AppProvider = ({ children }) => {
   };
 
   const triggerSync = async (options = {}) => {
-    if (isPhysicalOffline || syncStatus === 'offline') {
+    if (syncStatus === 'offline') {
       showToast('Cannot sync in offline mode. Please switch to online first.', 'warning');
       return;
     }
@@ -165,10 +165,6 @@ export const AppProvider = ({ children }) => {
   };
 
   const toggleOnlineState = async () => {
-    if (isPhysicalOffline) {
-      showToast('Cannot go online. No internet connection detected.', 'warning');
-      return;
-    }
     if (window.api) {
       const res = await window.api.toggleOnline();
       if (res.success) {

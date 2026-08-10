@@ -461,6 +461,10 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
             const selectCols = validColumns.has('updated_at') ? 'sync_status, updated_at' : 'sync_status';
             const localRow = db.prepare(`SELECT ${selectCols} FROM ${cfg.localTable} WHERE id = ?`).get(filteredRow.id);
             if (!localRow) {
+              if (cfg.localTable === 'teachers_admins' && (filteredRow.password_hash === undefined || filteredRow.password_hash === null)) {
+                const cryptoHelper = require('./cryptoHelper.cjs');
+                filteredRow.password_hash = cryptoHelper.hashPassword('wisdom123');
+              }
               const keys = Object.keys(filteredRow);
               const columns = [...keys, 'sync_status'];
               const placeholders = columns.map(() => '?').join(', ');
@@ -486,6 +490,9 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
                 : true;
 
               if (shouldUpdate) {
+                if (cfg.localTable === 'teachers_admins' && (filteredRow.password_hash === undefined || filteredRow.password_hash === null)) {
+                  delete filteredRow.password_hash;
+                }
                 const keys = Object.keys(filteredRow).filter(k => k !== 'id');
                 if (keys.length === 0) continue;
                 const setClause = keys.map(k => `${k} = ?`).join(', ');

@@ -164,4 +164,75 @@ describe('Sync Conflict Resolution Tests', () => {
     expect(studentInsert.args).toContain('New Pulled Student');
     expect(studentInsert.args).toContain('synced');
   });
+
+  it('should fallback to default password_hash on pull if missing for teachers_admins', async () => {
+    const db = new Database(':memory:');
+
+    const mockRemoteRecord = {
+      id: 'T103',
+      username: 'new_teacher',
+      role: 'teacher',
+      name: 'New Teacher Name',
+      email: 'teacher@wta.com',
+      updated_at: 2000
+    };
+
+    const mockResponse = {
+      statusCode: 200,
+      on: (event, cb) => {
+        if (event === 'data') {
+          cb(JSON.stringify([mockRemoteRecord]));
+        }
+        if (event === 'end') {
+          cb();
+        }
+      }
+    };
+
+    const mockRequest = {
+      on: vi.fn(),
+      setTimeout: vi.fn(),
+      end: vi.fn()
+    };
+
+    https.request = vi.fn().mockImplementation((options, callback) => {
+      callback(mockResponse);
+      return mockRequest;
+    });
+
+    const originalPrepare = db.prepare;
+    db.prepare = vi.fn().mockImplementation((sql) => {
+      if (sql.includes("PRAGMA table_info")) {
+        return {
+          all: () => [
+            { name: 'id' },
+            { name: 'username' },
+            { name: 'password_hash' },
+            { name: 'role' },
+            { name: 'name' },
+            { name: 'email' },
+            { name: 'updated_at' }
+          ]
+        };
+      }
+      return originalPrepare.call(db, sql);
+    });
+
+    const { pushPendingRecords } = require('../../utils/syncHelper.cjs');
+    const result = await pushPendingRecords(db, 'https://example.supabase.co', 'dummy-key', false);
+
+    expect(result.success).toBe(true);
+
+    const inserts = db.runCalls.filter(c => c.sql.includes('INSERT INTO teachers_admins'));
+    expect(inserts.length).toBeGreaterThan(0);
+
+    const teacherInsert = inserts[0];
+    const keysInSql = teacherInsert.sql.match(/\(([^)]+)\)/)[1].split(',').map(s => s.trim());
+    const passHashIndex = keysInSql.indexOf('password_hash');
+    expect(passHashIndex).toBeGreaterThan(-1);
+    
+    const passedValue = teacherInsert.args[passHashIndex];
+    expect(passedValue).toBeDefined();
+    expect(passedValue).toContain(':');
+  });
 });
