@@ -22,14 +22,23 @@ import {
 } from 'lucide-react';
 import './TuitionFees.css';
 
+const getLocalDateString = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 export const TuitionFees = () => {
-  const { showToast, refreshSyncInfo } = useApp();
+  const { currencySetting, showToast, refreshSyncInfo } = useApp();
 
   // Data states
   const [tuitionList, setTuitionList] = useState([]);
   const [classes, setClasses] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [paymentHistory, setPaymentHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -43,7 +52,7 @@ export const TuitionFees = () => {
   // Form states
   const [totalChargedInput, setTotalChargedInput] = useState('');
   const [amountInput, setAmountInput] = useState('');
-  const [dateInput, setDateInput] = useState(new Date().toISOString().split('T')[0]);
+  const [dateInput, setDateInput] = useState(getLocalDateString());
   const [methodInput, setMethodInput] = useState('Cash');
   const [notesInput, setNotesInput] = useState('');
 
@@ -164,7 +173,7 @@ export const TuitionFees = () => {
   const handleOpenRecordPayment = () => {
     if (!selectedStudent) return;
     setAmountInput('');
-    setDateInput(new Date().toISOString().split('T')[0]);
+    setDateInput(getLocalDateString());
     setMethodInput('Cash');
     setNotesInput('');
     setIsRecordPaymentOpen(true);
@@ -188,7 +197,8 @@ export const TuitionFees = () => {
       });
 
       if (res.success) {
-        showToast(`Payment of $${val} recorded locally!`, 'success');
+        const symbol = currencySetting === 'GHS' ? '₵' : '$';
+        showToast(`Payment of ${symbol}${val} recorded locally!`, 'success');
         setIsRecordPaymentOpen(false);
         refreshSyncInfo();
         // Reload data
@@ -221,9 +231,10 @@ export const TuitionFees = () => {
 
   // Helper formats
   const formatMoney = (amount) => {
-    return new Intl.NumberFormat(undefined, {
+    const isGHS = currencySetting === 'GHS';
+    return new Intl.NumberFormat(isGHS ? 'en-GH' : 'en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: isGHS ? 'GHS' : 'USD',
       minimumFractionDigits: 0
     }).format(amount);
   };
@@ -525,7 +536,7 @@ export const TuitionFees = () => {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Total Charged Fee Amount ($)</label>
+              <label className="form-label">Total Charged Fee Amount ({currencySetting === 'GHS' ? '₵' : '$'})</label>
               <input
                 type="number"
                 step="0.01"
@@ -563,7 +574,7 @@ export const TuitionFees = () => {
 
             <div className="grid grid-cols-2 gap-md">
               <div className="form-group">
-                <label className="form-label">Payment Amount ($)</label>
+                <label className="form-label">Payment Amount ({currencySetting === 'GHS' ? '₵' : '$'})</label>
                 <input
                   type="number"
                   step="0.01"

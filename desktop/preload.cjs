@@ -7,15 +7,19 @@ contextBridge.exposeInMainWorld('api', {
   changePassword: (username, currentPassword, newPassword) => ipcRenderer.invoke('db:change-password', username, currentPassword, newPassword),
   
   // Students
-  getStudents: () => ipcRenderer.invoke('db:get-students'),
+  getStudents: (userId) => ipcRenderer.invoke('db:get-students', userId),
   saveStudent: (student) => ipcRenderer.invoke('db:save-student', student),
-  deleteStudent: (id) => ipcRenderer.invoke('db:delete-student', id),
+  deleteStudent: (id, currentUserRole) => ipcRenderer.invoke('db:delete-student', id, currentUserRole),
   
   // Tuition & Fees
   getTuitionFees: () => ipcRenderer.invoke('db:get-tuition-fees'),
   getStudentPaymentHistory: (studentId) => ipcRenderer.invoke('db:get-student-payment-history', studentId),
   updateStudentTuition: (payload) => ipcRenderer.invoke('db:update-student-tuition', payload),
   recordTuitionPayment: (payload) => ipcRenderer.invoke('db:record-tuition-payment', payload),
+
+  // Settings
+  getSetting: (key) => ipcRenderer.invoke('db:get-setting', key),
+  saveSetting: (key, value) => ipcRenderer.invoke('db:save-setting', key, value),
 
   // Teachers / Admins
   getTeachers: () => ipcRenderer.invoke('db:get-teachers'),
@@ -36,9 +40,9 @@ contextBridge.exposeInMainWorld('api', {
   getQuestions: () => ipcRenderer.invoke('db:get-questions'),
   saveQuestion: (question) => ipcRenderer.invoke('db:save-question', question),
   deleteQuestion: (id, currentUserId, currentUserRole) => ipcRenderer.invoke('db:delete-question', id, currentUserId, currentUserRole),
-  importQuestions: (questions, currentUserId) => ipcRenderer.invoke('db:import-questions', questions, currentUserId),
+  importQuestions: (questions, currentUserId, currentUserRole) => ipcRenderer.invoke('db:import-questions', questions, currentUserId, currentUserRole),
   approveQuestion: (id, currentUserId) => ipcRenderer.invoke('db:approve-question', id, currentUserId),
-  archiveQuestion: (id, currentUserId) => ipcRenderer.invoke('db:archive-question', id, currentUserId),
+  archiveQuestion: (id, currentUserId, currentUserRole) => ipcRenderer.invoke('db:archive-question', id, currentUserId, currentUserRole),
   getQuestionVersions: (questionId) => ipcRenderer.invoke('db:get-question-versions', questionId),
   getAuditLogs: () => ipcRenderer.invoke('db:get-audit-logs'),
   getSchoolLogo: () => ipcRenderer.invoke('db:get-school-logo'),
@@ -63,13 +67,15 @@ contextBridge.exposeInMainWorld('api', {
   toggleOnline: () => ipcRenderer.invoke('sync:toggle-online'),
   setSyncConfig: (projectUrl, apiKey) => ipcRenderer.invoke('sync:set-config', projectUrl, apiKey),
   getSyncConfig: () => ipcRenderer.invoke('sync:get-config'),
-  getDashboardData: () => ipcRenderer.invoke('db:get-dashboard-data'),
+  getDashboardData: (userId) => ipcRenderer.invoke('db:get-dashboard-data', userId),
 
   // Images
   selectImage: () => ipcRenderer.invoke('image:select'),
 
   // Backup & Export
   backupDatabase: () => ipcRenderer.invoke('db:backup'),
+  restoreDatabase: () => ipcRenderer.invoke('db:restore'),
+  resetDatabase: () => ipcRenderer.invoke('db:reset'),
   exportQuestions: () => ipcRenderer.invoke('db:export-questions'),
   exportResults: () => ipcRenderer.invoke('db:export-results'),
 

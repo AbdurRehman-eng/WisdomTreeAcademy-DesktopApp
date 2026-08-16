@@ -16,7 +16,9 @@ export const SyncSettings = () => {
     licenseActive,
     validateLicense,
     refreshSyncInfo,
-    schoolLogo
+    schoolLogo,
+    currencySetting,
+    updateCurrencySetting
   } = useApp();
 
   const [newKey, setNewKey] = useState('');
@@ -83,6 +85,31 @@ export const SyncSettings = () => {
     }
   };
 
+  const handleRestoreDatabase = async () => {
+    const confirmed = window.confirm(
+      "WARNING: Restoring the database will overwrite all your current local records with the selected backup file. Any local changes since the backup was taken will be lost. We recommend performing a 'Backup DB' first to secure your current state. Are you sure you want to proceed?"
+    );
+    if (!confirmed) return;
+
+    try {
+      if (window.api?.restoreDatabase) {
+        const res = await window.api.restoreDatabase();
+        if (res.success) {
+          showToast('Database restored successfully! Reloading application...', 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else if (res.error !== 'Cancelled') {
+          showToast(res.error || 'Failed to restore database.', 'error');
+        }
+      } else {
+        showToast('Database restoration simulated (web preview mode).', 'info');
+      }
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+  };
+
   const handleExportQuestions = async () => {
     try {
       if (window.api?.exportQuestions) {
@@ -117,14 +144,32 @@ export const SyncSettings = () => {
     }
   };
 
-  const handleResetData = () => {
+  const handleResetData = async () => {
     const confirmed = window.confirm(
       "WARNING: This will reset the database cache, clear all offline records, and reload the application. This action CANNOT be undone. Are you absolutely sure you want to proceed?"
     );
     if (!confirmed) return;
 
-    showToast('Resetting database defaults... Cache cleared.', 'success');
-    window.location.reload();
+    try {
+      if (window.api?.resetDatabase) {
+        const res = await window.api.resetDatabase();
+        if (res.success) {
+          showToast('Resetting database defaults... Cache cleared.', 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        } else {
+          showToast(res.error || 'Failed to reset database.', 'error');
+        }
+      } else {
+        showToast('Database reset simulated (web preview mode).', 'info');
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
   };
 
   const handleActivateLicense = async () => {
@@ -178,17 +223,23 @@ export const SyncSettings = () => {
               <span style={{ color: 'var(--text-secondary)' }}>Database Status</span>
               <strong style={{ color: 'var(--color-success)' }}>Connected &amp; Active</strong>
             </div>
-            <div className="flex justify-between" style={{ paddingBottom: '8px' }}>
+            <div className="flex justify-between" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
               <span style={{ color: 'var(--text-secondary)' }}>Sync Integrity Check</span>
               <strong>Pass</strong>
             </div>
+            <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: 1.4, margin: '4px 0 0 0' }}>
+              <strong>Notice:</strong> <em>Reset DB</em> permanently deletes all offline records and cache tables, reverting to a blank state. To reload school data from a backup, use <em>Restore DB</em>.
+            </p>
           </div>
 
-          <div className="flex gap-sm" style={{ marginTop: 'auto' }}>
-            <Button variant="secondary" onClick={handleBackupDatabase} style={{ flex: 1 }}>
+          <div className="flex gap-sm" style={{ marginTop: 'auto', flexWrap: 'wrap' }}>
+            <Button variant="secondary" onClick={handleBackupDatabase} style={{ flex: 1, minWidth: '90px' }}>
               Backup DB
             </Button>
-            <Button variant="secondary" onClick={handleResetData} style={{ flex: 1 }}>
+            <Button variant="secondary" onClick={handleRestoreDatabase} style={{ flex: 1, minWidth: '90px' }}>
+              Restore DB
+            </Button>
+            <Button variant="secondary" onClick={handleResetData} style={{ flex: 1, minWidth: '90px', color: '#ef4444' }}>
               Reset DB
             </Button>
           </div>
@@ -228,7 +279,7 @@ export const SyncSettings = () => {
             <Button
               variant="primary"
               onClick={triggerSync}
-              disabled={syncStatus === 'syncing' || pendingSyncCount === 0}
+              disabled={syncStatus === 'syncing'}
               icon={RefreshCw}
               style={{ width: '100%', marginTop: '10px' }}
             >
@@ -246,7 +297,7 @@ export const SyncSettings = () => {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px', alignItems: 'center' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '16px', minHeight: '150px', background: 'var(--bg-secondary)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifycontent: 'center', border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '16px', minHeight: '150px', background: 'var(--bg-secondary)' }}>
               {schoolLogo ? (
                 <img src={schoolLogo} alt="School Logo Preview" style={{ maxWidth: '120px', maxHeight: '100px', objectFit: 'contain', marginBottom: '10px' }} />
               ) : (
@@ -263,6 +314,38 @@ export const SyncSettings = () => {
               </p>
               <div style={{ padding: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                 <strong>Note:</strong> Whenever a cloud sync is executed, your local client will automatically pull and apply any new custom branding set in the owner dashboard.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* School Preferences Card — full width */}
+        <div className="card flex flex-col gap-md" style={{ gridColumn: 'span 2' }}>
+          <div className="flex items-center gap-sm color-primary" style={{ color: 'var(--color-primary)' }}>
+            <Database size={20} />
+            <h3 className="card-title" style={{ marginBottom: 0 }}>School System Preferences</h3>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px', alignItems: 'center' }}>
+            <div className="form-group">
+              <label className="form-label" style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Active Currency Display</label>
+              <select
+                className="form-select"
+                value={currencySetting}
+                onChange={(e) => updateCurrencySetting(e.target.value)}
+                style={{ ...inputStyle, padding: '10px 12px' }}
+              >
+                <option value="GHS">Ghana Cedis (₵ / GHS)</option>
+                <option value="USD">US Dollars ($ / USD)</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                Select the default currency symbol and ledger formatting for the Tuition &amp; Fees portal and client receipt invoices.
+              </p>
+              <div style={{ padding: '8px 10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Currently Active: <strong>{currencySetting === 'GHS' ? '₵ GHS (Ghana Cedis)' : '$ USD (United States Dollars)'}</strong>
               </div>
             </div>
           </div>
@@ -378,9 +461,12 @@ export const SyncSettings = () => {
             Export your database records or create a full SQLite backup copy on your local system for record keeping.
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <Button variant="secondary" onClick={handleBackupDatabase}>
               Backup Local Database (.db)
+            </Button>
+            <Button variant="secondary" onClick={handleRestoreDatabase}>
+              Restore Local Database (.db)
             </Button>
             <Button variant="secondary" onClick={handleExportQuestions}>
               Export Question Bank (.csv)

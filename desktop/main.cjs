@@ -3,6 +3,80 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
+const dns = require('dns');
+const url = require('url');
+
+function checkInternet(projectUrl) {
+  return new Promise((resolve) => {
+    if (!projectUrl) {
+      resolve(false);
+      return;
+    }
+
+    let resolved = false;
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve(false);
+      }
+    }, 3000);
+
+    try {
+      const parsed = url.parse(projectUrl);
+      const isHttps = parsed.protocol === 'https:';
+      const httpModule = isHttps ? require('https') : require('http');
+      
+      const options = {
+        hostname: parsed.hostname,
+        port: parsed.port || (isHttps ? 443 : 80),
+        path: parsed.path || '/',
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Electron'
+        }
+      };
+
+      const req = httpModule.request(options, (res) => {
+        clearTimeout(timer);
+        if (!resolved) {
+          resolved = true;
+          resolve(true); // Reachable
+        }
+      });
+
+      req.on('error', (err) => {
+        clearTimeout(timer);
+        if (!resolved) {
+          resolved = true;
+          const offlineErrors = ['ENOTFOUND', 'ETIMEDOUT', 'EHOSTUNREACH', 'ECONNREFUSED'];
+          if (err.code && offlineErrors.includes(err.code)) {
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        }
+      });
+
+      req.setTimeout(2500, () => {
+        req.destroy();
+        clearTimeout(timer);
+        if (!resolved) {
+          resolved = true;
+          resolve(false);
+        }
+      });
+
+      req.end();
+    } catch (_) {
+      clearTimeout(timer);
+      if (!resolved) {
+        resolved = true;
+        resolve(false);
+      }
+    }
+  });
+}
+
 
 // Register custom media scheme for rendering local question images safely
 protocol.registerSchemesAsPrivileged([
@@ -21,6 +95,14 @@ if (!gotTheLock) {
 const { hashPassword, verifyPassword } = require('./utils/cryptoHelper.cjs');
 const { validateLicenseKey } = require('./utils/licenseHelper.cjs');
 const { pushPendingRecords } = require('./utils/syncHelper.cjs');
+
+function getLocalDateString() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 // Database Initialization
 function initDatabase() {
@@ -71,6 +153,9 @@ function initDatabase() {
   }
   if (!qColNames.includes('difficulty')) {
     db.prepare("ALTER TABLE question_bank ADD COLUMN difficulty TEXT DEFAULT 'Medium'").run();
+  }
+  if (!qColNames.includes('created_by')) {
+    db.prepare("ALTER TABLE question_bank ADD COLUMN created_by TEXT").run();
   }
   // Initialize existing questions to 'approved'
   try {
@@ -145,6 +230,16 @@ function initDatabase() {
 
   db.prepare(`CREATE INDEX IF NOT EXISTS idx_tuition_payments_student ON tuition_payments(student_id)`).run();
 
+  // Self-healing migrations for student_tuition and tuition_payments columns
+  const tuitionCols = db.prepare("PRAGMA table_info(student_tuition)").all().map(c => c.name);
+  if (!tuitionCols.includes('sync_status')) {
+    db.prepare("ALTER TABLE student_tuition ADD COLUMN sync_status TEXT DEFAULT 'pending'").run();
+  }
+  const paymentCols = db.prepare("PRAGMA table_info(tuition_payments)").all().map(c => c.name);
+  if (!paymentCols.includes('sync_status')) {
+    db.prepare("ALTER TABLE tuition_payments ADD COLUMN sync_status TEXT DEFAULT 'pending'").run();
+  }
+
   // Ensure unique index on attendance for conflict resolution (upsert)
   try {
     db.prepare(`
@@ -159,13 +254,6 @@ function initDatabase() {
   } catch (err) {
     console.error("Migration error for attendance index:", err);
   }
-  // Set default seeded accounts to 'pending' sync_status if they are currently set to 'synced'
-  try {
-    db.prepare("UPDATE teachers_admins SET sync_status = 'pending' WHERE username IN ('admin', 'teacher') AND sync_status = 'synced'").run();
-  } catch (err) {
-    console.error("Migration error for default accounts sync status:", err);
-  }
-  
   // Seed initial data if empty
   seedDatabase();
 }
@@ -356,11 +444,32 @@ function registerIpcHandlers() {
   });
 
   // Students IPC
-  ipcMain.handle('db:get-students', () => {
-    return db.prepare("SELECT * FROM students WHERE status = 'active' ORDER BY name ASC").all();
+  ipcMain.handle('db:get-students', (event, userId) => {
+    try {
+      const user = db.prepare("SELECT * FROM teachers_admins WHERE id = ?").get(userId);
+      if (user && user.role === 'teacher') {
+        let assignedClasses = [];
+        try {
+          assignedClasses = JSON.parse(user.assigned_classes_json || '[]');
+        } catch (_) {}
+        if (assignedClasses.length > 0) {
+          const placeholders = assignedClasses.map(() => '?').join(',');
+          return db.prepare(`SELECT * FROM students WHERE status = 'active' AND class IN (${placeholders}) ORDER BY name ASC`).all(...assignedClasses);
+        } else {
+          return [];
+        }
+      }
+      return db.prepare("SELECT * FROM students WHERE status = 'active' ORDER BY name ASC").all();
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
   });
   ipcMain.handle('db:save-student', (event, student) => {
-    const { id, name, roll_number, class: cls } = student;
+    const { id, name, roll_number, class: cls, currentUserRole } = student;
+    if (currentUserRole === 'teacher') {
+      return { success: false, error: 'Unauthorized: Teachers cannot register or edit student records.' };
+    }
     const now = Date.now();
     const idToUse = id || crypto.randomUUID();
     db.prepare(`
@@ -375,7 +484,10 @@ function registerIpcHandlers() {
     `).run(idToUse, name, roll_number, cls, now);
     return { success: true, id: idToUse };
   });
-  ipcMain.handle('db:delete-student', (event, id) => {
+  ipcMain.handle('db:delete-student', (event, id, currentUserRole) => {
+    if (currentUserRole === 'teacher') {
+      return { success: false, error: 'Unauthorized: Teachers cannot delete student records.' };
+    }
     const now = Date.now();
     db.prepare("UPDATE students SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
     return { success: true };
@@ -610,14 +722,43 @@ function registerIpcHandlers() {
 
   // Questions
   ipcMain.handle('db:get-questions', () => {
-    const questions = db.prepare("SELECT * FROM question_bank WHERE status != 'deleted'").all();
-    return questions.map(q => ({
-      ...q,
-      options: JSON.parse(q.options_json)
-    }));
+    try {
+      const questions = db.prepare(`
+        SELECT q.*, t.name as creator_name 
+        FROM question_bank q
+        LEFT JOIN teachers_admins t ON q.created_by = t.id
+        WHERE q.status != 'deleted'
+      `).all();
+      return questions.map(q => ({
+        ...q,
+        options: JSON.parse(q.options_json)
+      }));
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
   });
   ipcMain.handle('db:save-question', (event, q) => {
     const { id, class: cls, subject, text, audioText, options, correct_answer, image_path, difficulty, currentUserId, currentUserRole } = q;
+    
+    // Authorization check for editing
+    if (id) {
+      const existing = db.prepare("SELECT created_by FROM question_bank WHERE id = ?").get(id);
+      if (existing) {
+        if (currentUserRole === 'teacher' && existing.created_by !== currentUserId) {
+          return { success: false, error: 'Unauthorized: Teachers can only edit questions they created.' };
+        }
+      }
+    }
+
+    // Authorization & limit checks for creating
+    if (!id && currentUserRole === 'teacher') {
+      const countRow = db.prepare("SELECT count(*) as count FROM question_bank WHERE class = ? AND subject = ? AND created_by = ? AND status != 'deleted'").get(cls, subject, currentUserId);
+      if (countRow && countRow.count >= 20) {
+        return { success: false, error: 'Limit reached: Teachers can create at most 20 questions per class and subject.' };
+      }
+    }
+
     const now = Date.now();
     const idToUse = id || crypto.randomUUID();
     const optionsJson = JSON.stringify(options);
@@ -632,8 +773,8 @@ function registerIpcHandlers() {
     }
 
     db.prepare(`
-      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, difficulty, approval_status, status, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
+      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, difficulty, approval_status, created_by, status, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 'pending', ?)
       ON CONFLICT(id) DO UPDATE SET
         class = excluded.class,
         subject = excluded.subject,
@@ -646,7 +787,7 @@ function registerIpcHandlers() {
         approval_status = excluded.approval_status,
         sync_status = 'pending',
         updated_at = excluded.updated_at
-    `).run(idToUse, cls, subject, text, audioText, optionsJson, correct_answer, image_path || null, targetDifficulty, approvalStatus, now);
+    `).run(idToUse, cls, subject, text, audioText, optionsJson, correct_answer, image_path || null, targetDifficulty, approvalStatus, currentUserId || null, now);
 
     // Determine version number
     let versionNum = 1;
@@ -665,26 +806,38 @@ function registerIpcHandlers() {
     return { success: true, id: idToUse };
   });
   ipcMain.handle('db:delete-question', (event, id, currentUserId, currentUserRole) => {
-    const now = Date.now();
-    const existing = db.prepare("SELECT * FROM question_bank WHERE id = ?").get(id);
-    if (!existing) return { success: false, error: 'Question not found.' };
+    try {
+      const now = Date.now();
+      const existing = db.prepare("SELECT * FROM question_bank WHERE id = ?").get(id);
+      if (!existing) return { success: false, error: 'Question not found.' };
 
-    if (currentUserRole === 'owner') {
-      // Owner deletes permanently (by setting status to 'deleted')
-      db.prepare("UPDATE question_bank SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
-      writeAuditLog(currentUserId || 'unknown', 'DELETE_QUESTION', `Permanently deleted question: "${existing.text.substring(0, 30)}..."`);
-    } else {
-      // Other roles can only archive
-      db.prepare("UPDATE question_bank SET status = 'archived', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
-      writeAuditLog(currentUserId || 'unknown', 'ARCHIVE_QUESTION', `Archived question: "${existing.text.substring(0, 30)}..."`);
+      if (currentUserRole === 'teacher') {
+        return { success: false, error: 'Unauthorized: Teachers cannot delete questions permanently.' };
+      }
+
+      if (currentUserRole === 'owner' || currentUserRole === 'admin') {
+        // Owner and Admin delete permanently (by setting status to 'deleted')
+        db.prepare("UPDATE question_bank SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
+        writeAuditLog(currentUserId || 'unknown', 'DELETE_QUESTION', `Permanently deleted question: "${existing.text.substring(0, 30)}..."`);
+      } else {
+        // Other roles can only archive
+        db.prepare("UPDATE question_bank SET status = 'archived', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
+        writeAuditLog(currentUserId || 'unknown', 'ARCHIVE_QUESTION', `Archived question: "${existing.text.substring(0, 30)}..."`);
+      }
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
     }
-    return { success: true };
   });
-  ipcMain.handle('db:import-questions', (event, questions, currentUserId) => {
+  ipcMain.handle('db:import-questions', (event, questions, currentUserId, currentUserRole) => {
+    if (currentUserRole === 'teacher') {
+      return { success: false, error: 'Unauthorized: Teachers do not have CSV bulk-upload access.' };
+    }
     const now = Date.now();
     const insert = db.prepare(`
-      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, difficulty, approval_status, status, sync_status, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', 'active', 'pending', ?)
+      INSERT INTO question_bank (id, class, subject, text, audio_text, options_json, correct_answer, image_path, difficulty, approval_status, created_by, status, sync_status, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'approved', ?, 'active', 'pending', ?)
     `);
     const insertVersion = db.prepare(`
       INSERT INTO question_versions (id, question_id, class, subject, text, audio_text, options_json, correct_answer, difficulty, version_number, changed_by, sync_status, updated_at)
@@ -706,6 +859,7 @@ function registerIpcHandlers() {
           q.correct,
           q.image_path || null,
           diff,
+          currentUserId || null,
           now
         );
         insertVersion.run(
@@ -742,12 +896,60 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('db:archive-question', (event, id, currentUserId) => {
+  ipcMain.handle('db:archive-question', (event, id, currentUserId, currentUserRole) => {
     try {
       const now = Date.now();
       const existing = db.prepare("SELECT * FROM question_bank WHERE id = ?").get(id);
+      if (!existing) return { success: false, error: 'Question not found.' };
+
+      if (currentUserRole === 'teacher' && existing.created_by !== currentUserId) {
+        return { success: false, error: 'Unauthorized: Teachers can only archive questions they created.' };
+      }
+
       db.prepare("UPDATE question_bank SET status = 'archived', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
-      writeAuditLog(currentUserId || 'unknown', 'ARCHIVE_QUESTION', `Archived question: "${existing ? existing.text.substring(0, 30) : id}..."`);
+      writeAuditLog(currentUserId || 'unknown', 'ARCHIVE_QUESTION', `Archived question: "${existing.text.substring(0, 30)}..."`);
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('db:get-setting', (event, key) => {
+    try {
+      const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(key);
+      return row ? row.value : null;
+    } catch (e) {
+      console.error(e);
+      return null;
+    }
+  });
+
+  ipcMain.handle('db:save-setting', async (event, key, value) => {
+    try {
+      db.prepare(`
+        INSERT INTO settings (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `).run(key, value);
+
+      // Try to push to Supabase directly if online
+      try {
+        const urlRow = db.prepare("SELECT value FROM settings WHERE key = 'sync_endpoint'").get();
+        const keyRow = db.prepare("SELECT value FROM settings WHERE key = 'sync_api_key'").get();
+        const onlineRow = db.prepare("SELECT value FROM settings WHERE key = 'online_status'").get();
+        const projectUrl = urlRow ? urlRow.value : '';
+        const apiKey     = keyRow ? keyRow.value : '';
+        const isOnline   = onlineRow ? onlineRow.value === 'synced' : false;
+
+        if (isOnline && projectUrl && apiKey) {
+          const { pushSettingToCloud } = require('./utils/syncHelper.cjs');
+          await pushSettingToCloud(projectUrl, apiKey, key, value);
+        }
+      } catch (syncErr) {
+        console.warn('[main.cjs] Failed to push setting update to cloud:', syncErr.message);
+      }
+
       return { success: true };
     } catch (e) {
       console.error(e);
@@ -837,7 +1039,7 @@ function registerIpcHandlers() {
     const now = Date.now();
     const idToUse = id || crypto.randomUUID();
     const resultsJson = JSON.stringify(results);
-    const dateStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const dateStr = getLocalDateString(); // YYYY-MM-DD
     
     db.prepare(`
       INSERT INTO assessments (id, student_id, score, total_questions, results_json, date, sync_status, updated_at)
@@ -891,8 +1093,12 @@ function registerIpcHandlers() {
       const pendingQuestions = db.prepare("SELECT count(*) as count FROM question_bank WHERE sync_status = 'pending'").get().count;
       const pendingAssessments = db.prepare("SELECT count(*) as count FROM assessments WHERE sync_status = 'pending'").get().count;
       const pendingAttendance = db.prepare("SELECT count(*) as count FROM attendance WHERE sync_status = 'pending'").get().count;
+      const pendingStudentTuition = db.prepare("SELECT count(*) as count FROM student_tuition WHERE sync_status = 'pending'").get().count;
+      const pendingTuitionPayments = db.prepare("SELECT count(*) as count FROM tuition_payments WHERE sync_status = 'pending'").get().count;
       
-      const totalPending = pendingStudents + pendingTeachers + pendingClasses + pendingSubjects + pendingQuestions + pendingAssessments + pendingAttendance;
+      const totalPending = pendingStudents + pendingTeachers + pendingClasses + pendingSubjects + 
+                           pendingQuestions + pendingAssessments + pendingAttendance + 
+                           pendingStudentTuition + pendingTuitionPayments;
       
       const onlineRow = db.prepare("SELECT value FROM settings WHERE key = 'online_status'").get();
       const onlineStatus = onlineRow ? onlineRow.value : 'synced'; // 'synced', 'offline', 'syncing'
@@ -906,10 +1112,20 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('sync:toggle-online', () => {
+  ipcMain.handle('sync:toggle-online', async () => {
     try {
       const current = db.prepare("SELECT value FROM settings WHERE key = 'online_status'").get()?.value;
       const nextStatus = current === 'offline' ? 'synced' : 'offline';
+
+      if (nextStatus === 'synced') {
+        const urlRow = db.prepare("SELECT value FROM settings WHERE key = 'sync_endpoint'").get();
+        const projectUrl = urlRow ? urlRow.value : '';
+        const online = await checkInternet(projectUrl);
+        if (!online) {
+          return { success: false, error: 'Cannot go online. No internet connection detected to the cloud sync database.', status: 'offline' };
+        }
+      }
+
       db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', ?)")
         .run(nextStatus);
       return { success: true, status: nextStatus };
@@ -938,6 +1154,22 @@ function registerIpcHandlers() {
         db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
         return { success: false, hasConflicts: true, conflicts: result.conflicts };
       } else {
+        // Check if there was a network connection error
+        const isNetworkError = result.errors && result.errors.some(err => 
+          err.includes('ENOTFOUND') || 
+          err.includes('EAI_AGAIN') || 
+          err.includes('ECONNREFUSED') || 
+          err.includes('ETIMEDOUT') || 
+          err.includes('HTTP 0') || 
+          err.includes('timed out') ||
+          err.includes('timeout')
+        );
+
+        if (isNetworkError) {
+          db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'offline')").run();
+          return { success: false, isOffline: true, error: 'No internet connection detected. Switched to Offline Mode.' };
+        }
+
         // Partial sync — stay online but report errors
         db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
         return { success: false, error: result.errors.join('; '), syncedCount: result.syncedCount };
@@ -1006,46 +1238,146 @@ function registerIpcHandlers() {
     }
   });
 
-  ipcMain.handle('db:get-dashboard-data', () => {
+  ipcMain.handle('db:get-dashboard-data', (event, userId) => {
     try {
-      const studentCount = db.prepare("SELECT count(*) as count FROM students WHERE status = 'active'").get().count;
-      const facultyCount = db.prepare("SELECT count(*) as count FROM teachers_admins WHERE status = 'active'").get().count;
-      const classCount = db.prepare("SELECT count(*) as count FROM classes WHERE status = 'active'").get().count;
-      const assessmentCount = db.prepare("SELECT count(*) as count FROM assessments").get().count;
+      const user = db.prepare("SELECT * FROM teachers_admins WHERE id = ?").get(userId);
+      const isTeacher = user && user.role === 'teacher';
 
-      const todayStr = new Date().toISOString().split('T')[0];
-      const todayAttendance = db.prepare("SELECT status, count(*) as count FROM attendance WHERE date = ? AND type = 'student' GROUP BY status").all(todayStr);
-      let todayAttendanceRate = 'Pending';
-      if (todayAttendance.length > 0) {
-        let present = 0;
-        let late = 0;
-        let absent = 0;
-        todayAttendance.forEach(row => {
-          if (row.status === 'present') present = row.count;
-          else if (row.status === 'late') late = row.count;
-          else if (row.status === 'absent') absent = row.count;
-        });
-        const total = present + late + absent;
-        if (total > 0) {
-          todayAttendanceRate = `${Math.round(((present + (late * 0.8)) / total) * 100)}%`;
-        }
+      let classesList = [];
+      let subjectsList = [];
+      if (isTeacher) {
+        try {
+          classesList = JSON.parse(user.assigned_classes_json || '[]');
+          subjectsList = JSON.parse(user.assigned_subjects_json || '[]');
+        } catch (_) {}
       }
 
+      let studentCount, facultyCount, classCount, assessmentCount, todayAttendanceRate;
+      let activeClasses = [];
+
+      if (isTeacher) {
+        if (classesList.length > 0) {
+          const placeholders = classesList.map(() => '?').join(',');
+          
+          studentCount = db.prepare(`SELECT count(*) as count FROM students WHERE status = 'active' AND class IN (${placeholders})`).get(...classesList).count;
+          facultyCount = db.prepare("SELECT count(*) as count FROM teachers_admins WHERE status = 'active'").get().count;
+          classCount = classesList.length;
+          
+          assessmentCount = db.prepare(`
+            SELECT count(*) as count FROM assessments a
+            JOIN students s ON a.student_id = s.id
+            WHERE s.class IN (${placeholders})
+          `).get(...classesList).count;
+
+          const todayStr = getLocalDateString();
+          const todayAttendance = db.prepare(`
+            SELECT a.status, count(*) as count FROM attendance a
+            JOIN students s ON a.target_id = s.id
+            WHERE a.date = ? AND a.type = 'student' AND s.class IN (${placeholders})
+            GROUP BY a.status
+          `).all(todayStr, ...classesList);
+
+          todayAttendanceRate = 'Pending';
+          if (todayAttendance.length > 0) {
+            let present = 0;
+            let late = 0;
+            let absent = 0;
+            todayAttendance.forEach(row => {
+              if (row.status === 'present') present = row.count;
+              else if (row.status === 'late') late = row.count;
+              else if (row.status === 'absent') absent = row.count;
+            });
+            const total = present + late + absent;
+            if (total > 0) {
+              todayAttendanceRate = `${Math.round(((present + (late * 0.8)) / total) * 100)}%`;
+            }
+          }
+
+          classesList.forEach(cls => {
+            const count = db.prepare("SELECT count(*) as count FROM students WHERE status = 'active' AND class = ?").get(cls).count;
+            activeClasses.push({ name: cls, studentCount: count });
+          });
+        } else {
+          studentCount = 0;
+          facultyCount = db.prepare("SELECT count(*) as count FROM teachers_admins WHERE status = 'active'").get().count;
+          classCount = 0;
+          assessmentCount = 0;
+          todayAttendanceRate = 'No Classes';
+          activeClasses = [];
+        }
+      } else {
+        studentCount = db.prepare("SELECT count(*) as count FROM students WHERE status = 'active'").get().count;
+        facultyCount = db.prepare("SELECT count(*) as count FROM teachers_admins WHERE status = 'active'").get().count;
+        classCount = db.prepare("SELECT count(*) as count FROM classes WHERE status = 'active'").get().count;
+        assessmentCount = db.prepare("SELECT count(*) as count FROM assessments").get().count;
+
+        const todayStr = getLocalDateString();
+        const todayAttendance = db.prepare("SELECT status, count(*) as count FROM attendance WHERE date = ? AND type = 'student' GROUP BY status").all(todayStr);
+        todayAttendanceRate = 'Pending';
+        if (todayAttendance.length > 0) {
+          let present = 0;
+          let late = 0;
+          let absent = 0;
+          todayAttendance.forEach(row => {
+            if (row.status === 'present') present = row.count;
+            else if (row.status === 'late') late = row.count;
+            else if (row.status === 'absent') absent = row.count;
+          });
+          const total = present + late + absent;
+          if (total > 0) {
+            todayAttendanceRate = `${Math.round(((present + (late * 0.8)) / total) * 100)}%`;
+          }
+        }
+
+        const classrooms = db.prepare("SELECT name FROM classes WHERE status = 'active'").all();
+        const studentCounts = db.prepare("SELECT class, count(*) as count FROM students WHERE status = 'active' GROUP BY class").all();
+        const countMap = {};
+        studentCounts.forEach(x => { countMap[x.class] = x.count; });
+        activeClasses = classrooms.map(c => ({
+          name: c.name,
+          studentCount: countMap[c.name] || 0
+        }));
+      }
+
+      // Pending Items Gathers
       const pendingItems = [];
-      const pendingSt = db.prepare("SELECT name, class, updated_at FROM students WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
-      pendingSt.forEach(x => pendingItems.push({ type: 'Student', detail: `${x.name} (${x.class})`, timestamp: x.updated_at }));
-      const pendingT = db.prepare("SELECT name, role, updated_at FROM teachers_admins WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
-      pendingT.forEach(x => pendingItems.push({ type: 'Staff', detail: `${x.name} (${x.role})`, timestamp: x.updated_at }));
-      const pendingCl = db.prepare("SELECT name, updated_at FROM classes WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
-      pendingCl.forEach(x => pendingItems.push({ type: 'Classroom', detail: x.name, timestamp: x.updated_at }));
-      const pendingSub = db.prepare("SELECT name, updated_at FROM subjects WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
-      pendingSub.forEach(x => pendingItems.push({ type: 'Subject', detail: x.name, timestamp: x.updated_at }));
-      const pendingQu = db.prepare("SELECT class, subject, updated_at FROM question_bank WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
-      pendingQu.forEach(x => pendingItems.push({ type: 'Question', detail: `${x.subject} for ${x.class}`, timestamp: x.updated_at }));
-      const pendingAs = db.prepare("SELECT a.updated_at, s.name, a.score, a.total_questions FROM assessments a JOIN students s ON a.student_id = s.id WHERE a.sync_status = 'pending' ORDER BY a.updated_at DESC LIMIT 5").all();
-      pendingAs.forEach(x => pendingItems.push({ type: 'Assessment', detail: `${x.name} - ${x.score}/${x.total_questions}`, timestamp: x.updated_at }));
-      const pendingAt = db.prepare("SELECT a.updated_at, s.name, a.date, a.status FROM attendance a JOIN students s ON a.target_id = s.id WHERE a.sync_status = 'pending' ORDER BY a.updated_at DESC LIMIT 5").all();
-      pendingAt.forEach(x => pendingItems.push({ type: 'Attendance', detail: `${x.name} - ${x.status} (${x.date})`, timestamp: x.updated_at }));
+      
+      if (isTeacher) {
+        if (classesList.length > 0) {
+          const placeholders = classesList.map(() => '?').join(',');
+          
+          const pendingSt = db.prepare(`SELECT name, class, updated_at FROM students WHERE sync_status = 'pending' AND class IN (${placeholders}) ORDER BY updated_at DESC LIMIT 5`).all(...classesList);
+          pendingSt.forEach(x => pendingItems.push({ type: 'Student', detail: `${x.name} (${x.class})`, timestamp: x.updated_at }));
+          
+          const pendingQu = db.prepare(`SELECT class, subject, updated_at FROM question_bank WHERE sync_status = 'pending' AND class IN (${placeholders}) ORDER BY updated_at DESC LIMIT 5`).all(...classesList);
+          pendingQu.forEach(x => pendingItems.push({ type: 'Question', detail: `${x.subject} for ${x.class}`, timestamp: x.updated_at }));
+          
+          const pendingAs = db.prepare(`SELECT a.updated_at, s.name, a.score, a.total_questions FROM assessments a JOIN students s ON a.student_id = s.id WHERE a.sync_status = 'pending' AND s.class IN (${placeholders}) ORDER BY a.updated_at DESC LIMIT 5`).all(...classesList);
+          pendingAs.forEach(x => pendingItems.push({ type: 'Assessment', detail: `${x.name} - ${x.score}/${x.total_questions}`, timestamp: x.updated_at }));
+          
+          const pendingAt = db.prepare(`SELECT a.updated_at, s.name, a.date, a.status FROM attendance a JOIN students s ON a.target_id = s.id WHERE a.sync_status = 'pending' AND s.class IN (${placeholders}) ORDER BY a.updated_at DESC LIMIT 5`).all(...classesList);
+          pendingAt.forEach(x => pendingItems.push({ type: 'Attendance', detail: `${x.name} - ${x.status} (${x.date})`, timestamp: x.updated_at }));
+        }
+      } else {
+        const pendingSt = db.prepare("SELECT name, class, updated_at FROM students WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
+        pendingSt.forEach(x => pendingItems.push({ type: 'Student', detail: `${x.name} (${x.class})`, timestamp: x.updated_at }));
+        const pendingT = db.prepare("SELECT name, role, updated_at FROM teachers_admins WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
+        pendingT.forEach(x => pendingItems.push({ type: 'Staff', detail: `${x.name} (${x.role})`, timestamp: x.updated_at }));
+        const pendingCl = db.prepare("SELECT name, updated_at FROM classes WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
+        pendingCl.forEach(x => pendingItems.push({ type: 'Classroom', detail: x.name, timestamp: x.updated_at }));
+        const pendingSub = db.prepare("SELECT name, updated_at FROM subjects WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
+        pendingSub.forEach(x => pendingItems.push({ type: 'Subject', detail: x.name, timestamp: x.updated_at }));
+        const pendingQu = db.prepare("SELECT class, subject, updated_at FROM question_bank WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
+        pendingQu.forEach(x => pendingItems.push({ type: 'Question', detail: `${x.subject} for ${x.class}`, timestamp: x.updated_at }));
+        const pendingAs = db.prepare("SELECT a.updated_at, s.name, a.score, a.total_questions FROM assessments a JOIN students s ON a.student_id = s.id WHERE a.sync_status = 'pending' ORDER BY a.updated_at DESC LIMIT 5").all();
+        pendingAs.forEach(x => pendingItems.push({ type: 'Assessment', detail: `${x.name} - ${x.score}/${x.total_questions}`, timestamp: x.updated_at }));
+        const pendingAt = db.prepare("SELECT a.updated_at, s.name, a.date, a.status FROM attendance a JOIN students s ON a.target_id = s.id WHERE a.sync_status = 'pending' ORDER BY a.updated_at DESC LIMIT 5").all();
+        pendingAt.forEach(x => pendingItems.push({ type: 'Attendance', detail: `${x.name} - ${x.status} (${x.date})`, timestamp: x.updated_at }));
+        const pendingStT = db.prepare("SELECT student_id, updated_at FROM student_tuition WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
+        pendingStT.forEach(x => pendingItems.push({ type: 'Tuition', detail: `Tuition updated for Student ${x.student_id}`, timestamp: x.updated_at }));
+        const pendingTuP = db.prepare("SELECT amount, updated_at FROM tuition_payments WHERE sync_status = 'pending' ORDER BY updated_at DESC LIMIT 5").all();
+        pendingTuP.forEach(x => pendingItems.push({ type: 'Payment', detail: `Payment of ${x.amount} logged`, timestamp: x.updated_at }));
+      }
 
       pendingItems.sort((a, b) => b.timestamp - a.timestamp);
       const pendingSyncQueue = pendingItems.slice(0, 10).map(item => ({
@@ -1054,8 +1386,26 @@ function registerIpcHandlers() {
         date: new Date(item.timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
       }));
 
+      // Activity timeline
       const activityLog = [];
-      const recentAssessments = db.prepare("SELECT a.updated_at, a.score, a.total_questions, s.name as student_name FROM assessments a JOIN students s ON a.student_id = s.id ORDER BY a.updated_at DESC LIMIT 5").all();
+
+      let recentAssessmentsQuery = `SELECT a.updated_at, a.score, a.total_questions, s.name as student_name FROM assessments a JOIN students s ON a.student_id = s.id`;
+      let recentAssessmentsParams = [];
+      let recentAttendanceQuery = `SELECT a.updated_at, a.date, s.name, a.status FROM attendance a JOIN students s ON a.target_id = s.id WHERE a.type = 'student'`;
+      let recentAttendanceParams = [];
+
+      if (isTeacher && classesList.length > 0) {
+        const placeholders = classesList.map(() => '?').join(',');
+        recentAssessmentsQuery += ` WHERE s.class IN (${placeholders})`;
+        recentAssessmentsParams.push(...classesList);
+        recentAttendanceQuery += ` AND s.class IN (${placeholders})`;
+        recentAttendanceParams.push(...classesList);
+      }
+
+      recentAssessmentsQuery += ` ORDER BY a.updated_at DESC LIMIT 5`;
+      recentAttendanceQuery += ` ORDER BY a.updated_at DESC LIMIT 5`;
+
+      const recentAssessments = db.prepare(recentAssessmentsQuery).all(...recentAssessmentsParams);
       recentAssessments.forEach(x => {
         activityLog.push({
           type: 'assessment',
@@ -1064,25 +1414,8 @@ function registerIpcHandlers() {
           timestamp: x.updated_at
         });
       });
-      const recentSyncs = db.prepare("SELECT sync_time, status, changes_synced FROM sync_log ORDER BY sync_time DESC LIMIT 5").all();
-      recentSyncs.forEach(x => {
-        activityLog.push({
-          type: 'sync',
-          message: `Database sync ${x.status} (${x.changes_synced} items synced)`,
-          user: 'System',
-          timestamp: x.sync_time
-        });
-      });
-      const recentStudents = db.prepare("SELECT name, updated_at FROM students WHERE status = 'active' ORDER BY updated_at DESC LIMIT 5").all();
-      recentStudents.forEach(x => {
-        activityLog.push({
-          type: 'student',
-          message: `Registered student ${x.name}`,
-          user: 'Administrator',
-          timestamp: x.updated_at
-        });
-      });
-      const recentAttendance = db.prepare("SELECT a.updated_at, a.date, s.name, a.status FROM attendance a JOIN students s ON a.target_id = s.id WHERE a.type = 'student' ORDER BY a.updated_at DESC LIMIT 5").all();
+
+      const recentAttendance = db.prepare(recentAttendanceQuery).all(...recentAttendanceParams);
       recentAttendance.forEach(x => {
         activityLog.push({
           type: 'attendance',
@@ -1091,15 +1424,38 @@ function registerIpcHandlers() {
           timestamp: x.updated_at
         });
       });
-      const recentQuestions = db.prepare("SELECT class, subject, updated_at FROM question_bank WHERE status = 'active' ORDER BY updated_at DESC LIMIT 5").all();
-      recentQuestions.forEach(x => {
-        activityLog.push({
-          type: 'question',
-          message: `Added new question to ${x.class} ${x.subject} Bank`,
-          user: 'Administrator',
-          timestamp: x.updated_at
+
+      if (!isTeacher) {
+        const recentSyncs = db.prepare("SELECT sync_time, status, changes_synced FROM sync_log ORDER BY sync_time DESC LIMIT 5").all();
+        recentSyncs.forEach(x => {
+          activityLog.push({
+            type: 'sync',
+            message: `Database sync ${x.status} (${x.changes_synced} items synced)`,
+            user: 'System',
+            timestamp: x.sync_time
+          });
         });
-      });
+
+        const recentStudents = db.prepare("SELECT name, updated_at FROM students WHERE status = 'active' ORDER BY updated_at DESC LIMIT 5").all();
+        recentStudents.forEach(x => {
+          activityLog.push({
+            type: 'student',
+            message: `Registered student ${x.name}`,
+            user: 'Administrator',
+            timestamp: x.updated_at
+          });
+        });
+
+        const recentQuestions = db.prepare("SELECT class, subject, updated_at FROM question_bank WHERE status = 'active' ORDER BY updated_at DESC LIMIT 5").all();
+        recentQuestions.forEach(x => {
+          activityLog.push({
+            type: 'question',
+            message: `Added new question to ${x.class} ${x.subject} Bank`,
+            user: 'Administrator',
+            timestamp: x.updated_at
+          });
+        });
+      }
 
       activityLog.sort((a, b) => b.timestamp - a.timestamp);
       const formattedActivityLog = activityLog.slice(0, 10).map((log, idx) => {
@@ -1122,15 +1478,6 @@ function registerIpcHandlers() {
           time: timeDesc
         };
       });
-
-      const classrooms = db.prepare("SELECT name FROM classes WHERE status = 'active'").all();
-      const studentCounts = db.prepare("SELECT class, count(*) as count FROM students WHERE status = 'active' GROUP BY class").all();
-      const countMap = {};
-      studentCounts.forEach(x => { countMap[x.class] = x.count; });
-      const activeClasses = classrooms.map(c => ({
-        name: c.name,
-        studentCount: countMap[c.name] || 0
-      }));
 
       return {
         studentCount,
@@ -1206,6 +1553,99 @@ function registerIpcHandlers() {
       fs.copyFileSync(dbPath, filePath);
       return { success: true };
     } catch (e) {
+      return { success: false, error: e.message };
+    }
+  });
+
+  ipcMain.handle('db:restore', async () => {
+    const { dialog } = require('electron');
+    const { filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Restore Database from Backup',
+      filters: [{ name: 'SQLite Database', extensions: ['db'] }],
+      properties: ['openFile']
+    });
+
+    if (!filePaths || filePaths.length === 0) {
+      return { success: false, error: 'Cancelled' };
+    }
+
+    const selectedPath = filePaths[0];
+
+    // Validate the SQLite database file
+    let tempDb;
+    try {
+      tempDb = new Database(selectedPath, { fileMustExist: true });
+      const requiredTables = ['students', 'settings', 'teachers_admins', 'classes', 'subjects'];
+      const placeholders = requiredTables.map(() => '?').join(',');
+      const rows = tempDb.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type = 'table' AND name IN (${placeholders})
+      `).all(...requiredTables);
+      
+      tempDb.close();
+
+      if (rows.length < requiredTables.length) {
+        return { success: false, error: 'Invalid database file: Missing essential Wisdom Tree schema tables.' };
+      }
+    } catch (validationErr) {
+      if (tempDb) {
+        try { tempDb.close(); } catch (_) {}
+      }
+      return { success: false, error: `Invalid database file: ${validationErr.message}` };
+    }
+
+    // Perform database restore
+    try {
+      if (db) {
+        db.close();
+      }
+
+      const dbPath = path.join(app.getPath('userData'), 'wisdom_tree.db');
+      const walPath = `${dbPath}-wal`;
+      const shmPath = `${dbPath}-shm`;
+
+      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+      if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+      if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+
+      fs.copyFileSync(selectedPath, dbPath);
+
+      initDatabase();
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      // Reopen current database if copy failed
+      try {
+        const dbPath = path.join(app.getPath('userData'), 'wisdom_tree.db');
+        db = new Database(dbPath);
+        db.pragma('journal_mode = WAL');
+      } catch (_) {}
+      return { success: false, error: `Database restoration failed: ${e.message}` };
+    }
+  });
+
+  ipcMain.handle('db:reset', async () => {
+    try {
+      if (db) {
+        db.close();
+      }
+      const dbPath = path.join(app.getPath('userData'), 'wisdom_tree.db');
+      const walPath = `${dbPath}-wal`;
+      const shmPath = `${dbPath}-shm`;
+
+      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+      if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+      if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+
+      initDatabase();
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      try {
+        const dbPath = path.join(app.getPath('userData'), 'wisdom_tree.db');
+        db = new Database(dbPath);
+        db.pragma('journal_mode = WAL');
+      } catch (_) {}
       return { success: false, error: e.message };
     }
   });

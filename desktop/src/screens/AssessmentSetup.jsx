@@ -5,7 +5,7 @@ import Button from '../components/common/Button';
 import { PlayCircle, ShieldQuestion, HelpCircle } from 'lucide-react';
 
 export const AssessmentSetup = () => {
-  const { setScreen, showToast, setActiveAssessment } = useApp();
+  const { setScreen, showToast, setActiveAssessment, user } = useApp();
   
   const [classes, setClasses] = useState([]);
   const [subjects, setSubjects] = useState([]);
@@ -21,22 +21,40 @@ export const AssessmentSetup = () => {
       if (window.api) {
         const clsList = await window.api.getClasses();
         const subList = await window.api.getSubjects();
-        const stdList = await window.api.getStudents();
+        const stdList = await window.api.getStudents(user?.id);
         
-        setClasses(clsList);
-        setSubjects(subList);
-        setAllStudents(stdList);
-
-        if (clsList.length > 0) {
-          setSelectedGrade(clsList[0].name);
+        let filteredClasses = clsList;
+        let filteredSubjects = subList;
+        let filteredStudents = stdList;
+        
+        const isTeacher = user?.role === 'teacher';
+        if (isTeacher) {
+          let assignedClasses = [];
+          let assignedSubjects = [];
+          try {
+            assignedClasses = JSON.parse(user.assigned_classes_json || '[]');
+            assignedSubjects = JSON.parse(user.assigned_subjects_json || '[]');
+          } catch (_) {}
+          
+          filteredClasses = clsList.filter(c => assignedClasses.includes(c.name));
+          filteredSubjects = subList.filter(s => assignedSubjects.includes(s.name));
+          filteredStudents = stdList.filter(s => assignedClasses.includes(s.class));
         }
-        if (subList.length > 0) {
-          setSelectedSubject(subList[0].name);
+
+        setClasses(filteredClasses);
+        setSubjects(filteredSubjects);
+        setAllStudents(filteredStudents);
+
+        if (filteredClasses.length > 0) {
+          setSelectedGrade(filteredClasses[0].name);
+        }
+        if (filteredSubjects.length > 0) {
+          setSelectedSubject(filteredSubjects[0].name);
         }
       }
     };
     loadSetupData();
-  }, []);
+  }, [user]);
 
   // Filter students based on selected grade
   const gradeStudents = allStudents.filter(s => s.class === selectedGrade);

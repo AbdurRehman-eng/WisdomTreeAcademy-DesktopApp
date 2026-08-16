@@ -12,7 +12,7 @@ function getPerformanceBand(percent) {
 }
 
 export const Reports = () => {
-  const { showToast, schoolLogo } = useApp();
+  const { showToast, schoolLogo, user } = useApp();
   const printAreaRef = useRef(null);
 
   const [assessments, setAssessments]   = useState([]);
@@ -24,15 +24,30 @@ export const Reports = () => {
     const loadReportsData = async () => {
       if (window.api) {
         const classesList = await window.api.getClasses();
-        const gradesNames = classesList.map(c => c.name);
+        let filteredClasses = classesList;
+        
+        const isTeacher = user?.role === 'teacher';
+        if (isTeacher) {
+          let assignedClasses = [];
+          try {
+            assignedClasses = JSON.parse(user.assigned_classes_json || '[]');
+          } catch (_) {}
+          filteredClasses = classesList.filter(c => assignedClasses.includes(c.name));
+        }
+        
+        const gradesNames = filteredClasses.map(c => c.name);
         setGrades(gradesNames);
 
         const list = await window.api.getAssessments();
-        setAssessments(list);
+        const filteredAssessments = isTeacher
+          ? list.filter(a => gradesNames.includes(a.student_class))
+          : list;
+          
+        setAssessments(filteredAssessments);
 
         // Calculate grade averages for all grades
         const sums = gradesNames.reduce((acc, g) => ({ ...acc, [g]: { sum: 0, count: 0 } }), {});
-        list.forEach(a => {
+        filteredAssessments.forEach(a => {
           const cls = a.student_class;
           if (sums[cls]) {
             sums[cls].sum   += (a.score / a.total_questions) * 100;
@@ -51,7 +66,7 @@ export const Reports = () => {
       }
     };
     loadReportsData();
-  }, []);
+  }, [user]);
 
   // Build HTML for a single report card
   const buildReportCardHTML = (item) => {

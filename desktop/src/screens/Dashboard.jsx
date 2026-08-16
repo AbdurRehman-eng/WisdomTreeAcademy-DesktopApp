@@ -30,7 +30,7 @@ export const Dashboard = () => {
 
   const fetchDashboardData = async () => {
     if (window.api) {
-      const data = await window.api.getDashboardData();
+      const data = await window.api.getDashboardData(user?.id);
       setDashboardData(data);
     } else {
       // Browser fallback (Web preview / fallback metrics)
@@ -62,7 +62,7 @@ export const Dashboard = () => {
 
   if (!user) return null;
 
-  const isAdmin = user.role === 'admin';
+  const isAdmin = user.role !== 'teacher';
 
   return (
     <div className="page-container fade-in">
@@ -159,7 +159,7 @@ export const Dashboard = () => {
                   <h3 className="card-title">Local Database Sync Queue</h3>
                   <button
                     onClick={triggerSync}
-                    disabled={syncStatus === 'syncing' || pendingSyncCount === 0}
+                    disabled={syncStatus === 'syncing'}
                     className="sync-now-action-btn"
                   >
                     Sync Now
