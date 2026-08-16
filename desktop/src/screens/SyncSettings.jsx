@@ -85,6 +85,31 @@ export const SyncSettings = () => {
     }
   };
 
+  const handleRestoreDatabase = async () => {
+    const confirmed = window.confirm(
+      "WARNING: Restoring the database will overwrite all your current local records with the selected backup file. Any local changes since the backup was taken will be lost. We recommend performing a 'Backup DB' first to secure your current state. Are you sure you want to proceed?"
+    );
+    if (!confirmed) return;
+
+    try {
+      if (window.api?.restoreDatabase) {
+        const res = await window.api.restoreDatabase();
+        if (res.success) {
+          showToast('Database restored successfully! Reloading application...', 'success');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else if (res.error !== 'Cancelled') {
+          showToast(res.error || 'Failed to restore database.', 'error');
+        }
+      } else {
+        showToast('Database restoration simulated (web preview mode).', 'info');
+      }
+    } catch (e) {
+      showToast(e.message, 'error');
+    }
+  };
+
   const handleExportQuestions = async () => {
     try {
       if (window.api?.exportQuestions) {
@@ -198,17 +223,23 @@ export const SyncSettings = () => {
               <span style={{ color: 'var(--text-secondary)' }}>Database Status</span>
               <strong style={{ color: 'var(--color-success)' }}>Connected &amp; Active</strong>
             </div>
-            <div className="flex justify-between" style={{ paddingBottom: '8px' }}>
+            <div className="flex justify-between" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
               <span style={{ color: 'var(--text-secondary)' }}>Sync Integrity Check</span>
               <strong>Pass</strong>
             </div>
+            <p style={{ fontSize: '11.5px', color: 'var(--text-secondary)', lineHeight: 1.4, margin: '4px 0 0 0' }}>
+              <strong>Notice:</strong> <em>Reset DB</em> permanently deletes all offline records and cache tables, reverting to a blank state. To reload school data from a backup, use <em>Restore DB</em>.
+            </p>
           </div>
 
-          <div className="flex gap-sm" style={{ marginTop: 'auto' }}>
-            <Button variant="secondary" onClick={handleBackupDatabase} style={{ flex: 1 }}>
+          <div className="flex gap-sm" style={{ marginTop: 'auto', flexWrap: 'wrap' }}>
+            <Button variant="secondary" onClick={handleBackupDatabase} style={{ flex: 1, minWidth: '90px' }}>
               Backup DB
             </Button>
-            <Button variant="secondary" onClick={handleResetData} style={{ flex: 1 }}>
+            <Button variant="secondary" onClick={handleRestoreDatabase} style={{ flex: 1, minWidth: '90px' }}>
+              Restore DB
+            </Button>
+            <Button variant="secondary" onClick={handleResetData} style={{ flex: 1, minWidth: '90px', color: '#ef4444' }}>
               Reset DB
             </Button>
           </div>
@@ -430,9 +461,12 @@ export const SyncSettings = () => {
             Export your database records or create a full SQLite backup copy on your local system for record keeping.
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <Button variant="secondary" onClick={handleBackupDatabase}>
               Backup Local Database (.db)
+            </Button>
+            <Button variant="secondary" onClick={handleRestoreDatabase}>
+              Restore Local Database (.db)
             </Button>
             <Button variant="secondary" onClick={handleExportQuestions}>
               Export Question Bank (.csv)

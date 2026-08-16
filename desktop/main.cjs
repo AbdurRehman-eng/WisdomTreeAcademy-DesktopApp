@@ -1557,6 +1557,73 @@ function registerIpcHandlers() {
     }
   });
 
+  ipcMain.handle('db:restore', async () => {
+    const { dialog } = require('electron');
+    const { filePaths } = await dialog.showOpenDialog(mainWindow, {
+      title: 'Restore Database from Backup',
+      filters: [{ name: 'SQLite Database', extensions: ['db'] }],
+      properties: ['openFile']
+    });
+
+    if (!filePaths || filePaths.length === 0) {
+      return { success: false, error: 'Cancelled' };
+    }
+
+    const selectedPath = filePaths[0];
+
+    // Validate the SQLite database file
+    let tempDb;
+    try {
+      tempDb = new Database(selectedPath, { fileMustExist: true });
+      const requiredTables = ['students', 'settings', 'teachers_admins', 'classes', 'subjects'];
+      const placeholders = requiredTables.map(() => '?').join(',');
+      const rows = tempDb.prepare(`
+        SELECT name FROM sqlite_master 
+        WHERE type = 'table' AND name IN (${placeholders})
+      `).all(...requiredTables);
+      
+      tempDb.close();
+
+      if (rows.length < requiredTables.length) {
+        return { success: false, error: 'Invalid database file: Missing essential Wisdom Tree schema tables.' };
+      }
+    } catch (validationErr) {
+      if (tempDb) {
+        try { tempDb.close(); } catch (_) {}
+      }
+      return { success: false, error: `Invalid database file: ${validationErr.message}` };
+    }
+
+    // Perform database restore
+    try {
+      if (db) {
+        db.close();
+      }
+
+      const dbPath = path.join(app.getPath('userData'), 'wisdom_tree.db');
+      const walPath = `${dbPath}-wal`;
+      const shmPath = `${dbPath}-shm`;
+
+      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath);
+      if (fs.existsSync(walPath)) fs.unlinkSync(walPath);
+      if (fs.existsSync(shmPath)) fs.unlinkSync(shmPath);
+
+      fs.copyFileSync(selectedPath, dbPath);
+
+      initDatabase();
+      return { success: true };
+    } catch (e) {
+      console.error(e);
+      // Reopen current database if copy failed
+      try {
+        const dbPath = path.join(app.getPath('userData'), 'wisdom_tree.db');
+        db = new Database(dbPath);
+        db.pragma('journal_mode = WAL');
+      } catch (_) {}
+      return { success: false, error: `Database restoration failed: ${e.message}` };
+    }
+  });
+
   ipcMain.handle('db:reset', async () => {
     try {
       if (db) {
