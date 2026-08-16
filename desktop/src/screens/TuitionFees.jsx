@@ -31,7 +31,7 @@ const getLocalDateString = () => {
 };
 
 export const TuitionFees = () => {
-  const { showToast, refreshSyncInfo } = useApp();
+  const { currencySetting, showToast, refreshSyncInfo } = useApp();
 
   // Data states
   const [tuitionList, setTuitionList] = useState([]);
@@ -197,7 +197,8 @@ export const TuitionFees = () => {
       });
 
       if (res.success) {
-        showToast(`Payment of $${val} recorded locally!`, 'success');
+        const symbol = currencySetting === 'GHS' ? '₵' : '$';
+        showToast(`Payment of ${symbol}${val} recorded locally!`, 'success');
         setIsRecordPaymentOpen(false);
         refreshSyncInfo();
         // Reload data
@@ -230,9 +231,10 @@ export const TuitionFees = () => {
 
   // Helper formats
   const formatMoney = (amount) => {
-    return new Intl.NumberFormat(undefined, {
+    const isGHS = currencySetting === 'GHS';
+    return new Intl.NumberFormat(isGHS ? 'en-GH' : 'en-US', {
       style: 'currency',
-      currency: 'USD',
+      currency: isGHS ? 'GHS' : 'USD',
       minimumFractionDigits: 0
     }).format(amount);
   };
@@ -534,7 +536,7 @@ export const TuitionFees = () => {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Total Charged Fee Amount ($)</label>
+              <label className="form-label">Total Charged Fee Amount ({currencySetting === 'GHS' ? '₵' : '$'})</label>
               <input
                 type="number"
                 step="0.01"
@@ -572,7 +574,7 @@ export const TuitionFees = () => {
 
             <div className="grid grid-cols-2 gap-md">
               <div className="form-group">
-                <label className="form-label">Payment Amount ($)</label>
+                <label className="form-label">Payment Amount ({currencySetting === 'GHS' ? '₵' : '$'})</label>
                 <input
                   type="number"
                   step="0.01"

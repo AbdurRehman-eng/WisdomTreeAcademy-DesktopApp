@@ -14,7 +14,7 @@ const getLocalDateString = () => {
 };
 
 export const Attendance = () => {
-  const { showToast, refreshSyncInfo } = useApp();
+  const { user, showToast, refreshSyncInfo } = useApp();
   const [classes, setClasses] = useState([]);
   const [selectedGrade, setSelectedGrade] = useState('');
   const [students, setStudents] = useState([]);
@@ -27,14 +27,22 @@ export const Attendance = () => {
     const loadClasses = async () => {
       if (window.api) {
         const clsList = await window.api.getClasses();
-        setClasses(clsList);
-        if (clsList.length > 0) {
-          setSelectedGrade(clsList[0].name);
+        let filtered = clsList;
+        if (user?.role === 'teacher') {
+          let assignedClasses = [];
+          try {
+            assignedClasses = JSON.parse(user.assigned_classes_json || '[]');
+          } catch (_) {}
+          filtered = clsList.filter(c => assignedClasses.includes(c.name));
+        }
+        setClasses(filtered);
+        if (filtered.length > 0) {
+          setSelectedGrade(filtered[0].name);
         }
       }
     };
     loadClasses();
-  }, []);
+  }, [user]);
 
   // Load student rosters and any existing attendance records for selected grade and date
   useEffect(() => {
@@ -42,8 +50,8 @@ export const Attendance = () => {
 
     const loadRosterAndAttendance = async () => {
       if (window.api) {
-        // Fetch all students
-        const allStudents = await window.api.getStudents();
+        // Fetch all students (filtered for teachers)
+        const allStudents = await window.api.getStudents(user?.id);
         // Filter by selected classroom
         const gradeStudents = allStudents.filter(s => s.class === selectedGrade);
         setStudents(gradeStudents);
@@ -61,7 +69,7 @@ export const Attendance = () => {
       }
     };
     loadRosterAndAttendance();
-  }, [selectedGrade]);
+  }, [selectedGrade, user]);
 
   const handleStatusChange = (studentId, status) => {
     setAttendanceState(prev => ({

@@ -62,7 +62,7 @@ export const QuestionBank = () => {
   const fetchQuestions = async () => {
     if (window.api) {
       const list = await window.api.getQuestions({ includeAll: true });
-      const mapped = list.map(q => ({
+      let mapped = list.map(q => ({
         id: q.id,
         grade: q.class,
         subject: q.subject,
@@ -73,8 +73,21 @@ export const QuestionBank = () => {
         audioText: q.audio_text || q.text,
         image_path: q.image_path,
         is_approved: q.approval_status === 'approved',
-        status: q.status === 'archived' ? 'archived' : (q.approval_status === 'pending_approval' ? 'pending' : 'approved')
+        status: q.status === 'archived' ? 'archived' : (q.approval_status === 'pending_approval' ? 'pending' : 'approved'),
+        created_by: q.created_by,
+        creator_name: q.creator_name
       }));
+
+      const isTeacher = user?.role === 'teacher';
+      if (isTeacher) {
+        let assignedClasses = [];
+        let assignedSubjects = [];
+        try {
+          assignedClasses = JSON.parse(user.assigned_classes_json || '[]');
+          assignedSubjects = JSON.parse(user.assigned_subjects_json || '[]');
+        } catch (_) {}
+        mapped = mapped.filter(q => assignedClasses.includes(q.grade) && assignedSubjects.includes(q.subject));
+      }
       setQuestions(mapped);
     }
   };
@@ -111,8 +124,21 @@ export const QuestionBank = () => {
       if (window.api) {
         const clsList = await window.api.getClasses();
         const subList = await window.api.getSubjects();
-        const gNames = clsList.map(c => c.name);
-        const sNames = subList.map(s => s.name);
+        let gNames = clsList.map(c => c.name);
+        let sNames = subList.map(s => s.name);
+
+        const isTeacher = user?.role === 'teacher';
+        if (isTeacher) {
+          let assignedClasses = [];
+          let assignedSubjects = [];
+          try {
+            assignedClasses = JSON.parse(user.assigned_classes_json || '[]');
+            assignedSubjects = JSON.parse(user.assigned_subjects_json || '[]');
+          } catch (_) {}
+          gNames = gNames.filter(n => assignedClasses.includes(n));
+          sNames = sNames.filter(n => assignedSubjects.includes(n));
+        }
+
         setGradesList(['All', ...gNames]);
         setSubjectsList(['All', ...sNames]);
         if (gNames.length > 0) setFormGrade(gNames[0]);
@@ -121,7 +147,7 @@ export const QuestionBank = () => {
     };
     loadSetupData();
     fetchQuestions();
-  }, []);
+  }, [user]);
 
   const filteredQuestions = questions.filter(q => {
     const matchGrade = selectedGrade === 'All' || q.grade === selectedGrade;
@@ -168,7 +194,8 @@ export const QuestionBank = () => {
       ],
       correct_answer: correctOpt,
       image_path: imagePath || null,
-      currentUserId: user?.id
+      currentUserId: user?.id,
+      currentUserRole: user?.role
     };
 
     if (window.api) {
@@ -202,7 +229,7 @@ export const QuestionBank = () => {
   const handleDelete = async (id) => {
     if (confirm('Are you sure you want to permanently delete this question? This action is irreversible.')) {
       if (window.api) {
-        const res = await window.api.deleteQuestion(id, user?.id);
+        const res = await window.api.deleteQuestion(id, user?.id, user?.role);
         if (res.success) {
           showToast(`Question deleted permanently.`, 'success');
           fetchQuestions();
@@ -217,7 +244,7 @@ export const QuestionBank = () => {
   const handleArchive = async (id) => {
     if (confirm('Are you sure you want to archive this question? It will no longer be active for student assessments.')) {
       if (window.api) {
-        const res = await window.api.archiveQuestion(id, user?.id);
+        const res = await window.api.archiveQuestion(id, user?.id, user?.role);
         if (res.success) {
           showToast('Question archived successfully.', 'success');
           fetchQuestions();
@@ -323,7 +350,7 @@ export const QuestionBank = () => {
       if (window.api) {
         // Pass currentUserId for audit logs
         const rowsWithUser = rows.map(r => ({ ...r, currentUserId: user?.id }));
-        const res = await window.api.importQuestions(rowsWithUser);
+        const res = await window.api.importQuestions(rowsWithUser, user?.id, user?.role);
         if (res.success) {
           showToast(`Successfully imported ${rows.length} question(s) into the local bank.`, 'success');
           fetchQuestions();
@@ -363,25 +390,29 @@ export const QuestionBank = () => {
         </div>
 
         <div className="qb-actions-group">
-          {/* Hidden file input for CSV import */}
-          <input
-            type="file"
-            accept=".csv,text/csv"
-            ref={csvFileInputRef}
-            style={{ display: 'none' }}
-            onChange={handleCSVFileSelected}
-          />
-          <Button variant="secondary" onClick={triggerImportCSV} icon={Upload}>
-            Import CSV Template
-          </Button>
-          <a
-            href="/templates/sample_questions.csv"
-            download="sample_questions.csv"
-            className="csv-download-link"
-          >
-            <Download size={14} style={{ marginRight: '6px' }} />
-            Get Template
-          </a>
+          {user?.role !== 'teacher' && (
+            <>
+              {/* Hidden file input for CSV import */}
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                ref={csvFileInputRef}
+                style={{ display: 'none' }}
+                onChange={handleCSVFileSelected}
+              />
+              <Button variant="secondary" onClick={triggerImportCSV} icon={Upload}>
+                Import CSV Template
+              </Button>
+              <a
+                href="/templates/sample_questions.csv"
+                download="sample_questions.csv"
+                className="csv-download-link"
+              >
+                <Download size={14} style={{ marginRight: '6px' }} />
+                Get Template
+              </a>
+            </>
+          )}
           <Button variant="primary" onClick={() => setIsAddModalOpen(true)} icon={Plus}>
             Add Question
           </Button>
@@ -483,6 +514,10 @@ export const QuestionBank = () => {
                     </span>
                   </div>
 
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '8px', fontStyle: 'italic' }}>
+                    Author: {q.creator_name || 'System Administrator'}
+                  </div>
+
                   <p className="qp-question-text">{q.text}</p>
 
                   {q.image_path && (
@@ -538,7 +573,7 @@ export const QuestionBank = () => {
                         </button>
                       )}
 
-                      {user?.role === 'owner' ? (
+                      {user?.role === 'owner' || user?.role === 'admin' ? (
                         <button 
                           type="button" 
                           className="qp-action-btn-link delete" 
@@ -547,7 +582,7 @@ export const QuestionBank = () => {
                           Delete
                         </button>
                       ) : (
-                        q.status !== 'archived' && (
+                        q.status !== 'archived' && (user?.role !== 'teacher' || q.created_by === user?.id) && (
                           <button 
                             type="button" 
                             style={{ color: 'var(--text-secondary, #9ca3af)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }} 

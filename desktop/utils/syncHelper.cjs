@@ -237,6 +237,8 @@ const TABLES_CONFIG = [
   {
     localTable:    'classes',
     remoteTable:   'classes',
+    onConflict:    'name',
+    uniqueKeys:    ['name'],
     selectQuery:   "SELECT id, name, status, updated_at FROM classes WHERE sync_status = 'pending'",
     markSynced:    "UPDATE classes SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, name: r.name, status: r.status, updated_at: r.updated_at })
@@ -244,6 +246,8 @@ const TABLES_CONFIG = [
   {
     localTable:    'subjects',
     remoteTable:   'subjects',
+    onConflict:    'name',
+    uniqueKeys:    ['name'],
     selectQuery:   "SELECT id, name, status, updated_at FROM subjects WHERE sync_status = 'pending'",
     markSynced:    "UPDATE subjects SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, name: r.name, status: r.status, updated_at: r.updated_at })
@@ -265,6 +269,8 @@ const TABLES_CONFIG = [
   {
     localTable:    'attendance',
     remoteTable:   'attendance',
+    onConflict:    'type,target_id,date',
+    uniqueKeys:    ['type', 'target_id', 'date'],
     selectQuery:   "SELECT id, type, target_id, date, status, updated_at FROM attendance WHERE sync_status = 'pending'",
     markSynced:    "UPDATE attendance SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, type: r.type, target_id: r.target_id, date: r.date, status: r.status, updated_at: r.updated_at })
@@ -286,6 +292,8 @@ const TABLES_CONFIG = [
   {
     localTable:    'student_tuition',
     remoteTable:   'student_tuition',
+    onConflict:    'student_id',
+    uniqueKeys:    ['student_id'],
     selectQuery:   "SELECT id, student_id, total_charged, amount_paid, updated_at FROM student_tuition WHERE sync_status = 'pending'",
     markSynced:    "UPDATE student_tuition SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, student_id: r.student_id, total_charged: r.total_charged, amount_paid: r.amount_paid, updated_at: r.updated_at })
@@ -417,7 +425,11 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
       if (rows.length === 0) continue;
 
       const payload  = rows.map(cfg.mapRow);
-      const endpoint = `${baseUrl}/rest/v1/${cfg.remoteTable}`;
+      let urlParams = '';
+      if (cfg.onConflict) {
+        urlParams = `?on_conflict=${cfg.onConflict}`;
+      }
+      const endpoint = `${baseUrl}/rest/v1/${cfg.remoteTable}${urlParams}`;
       const result   = await supabaseUpsert(endpoint, apiKey, payload);
 
       if (result.ok) {
@@ -458,8 +470,25 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
               }
             }
 
+            let localRow = null;
+            let idMismatchedRow = null;
+
             const selectCols = validColumns.has('updated_at') ? 'sync_status, updated_at' : 'sync_status';
-            const localRow = db.prepare(`SELECT ${selectCols} FROM ${cfg.localTable} WHERE id = ?`).get(filteredRow.id);
+            localRow = db.prepare(`SELECT ${selectCols} FROM ${cfg.localTable} WHERE id = ?`).get(filteredRow.id);
+
+            // Alternate unique keys mismatch healing
+            if (!localRow && cfg.uniqueKeys) {
+              const clauses = cfg.uniqueKeys.map(k => `${k} = ?`).join(' AND ');
+              const params = cfg.uniqueKeys.map(k => filteredRow[k]);
+              const selectMismatchedCols = validColumns.has('updated_at') ? 'id, sync_status, updated_at' : 'id, sync_status';
+              idMismatchedRow = db.prepare(`SELECT ${selectMismatchedCols} FROM ${cfg.localTable} WHERE ${clauses}`).get(...params);
+              
+              if (idMismatchedRow) {
+                // Heals the local ID mismatch: update local ID to remote ID!
+                db.prepare(`UPDATE ${cfg.localTable} SET id = ? WHERE id = ?`).run(filteredRow.id, idMismatchedRow.id);
+                localRow = db.prepare(`SELECT ${selectCols} FROM ${cfg.localTable} WHERE id = ?`).get(filteredRow.id);
+              }
+            }
             if (!localRow) {
               if (cfg.localTable === 'teachers_admins' && (filteredRow.password_hash === undefined || filteredRow.password_hash === null)) {
                 const cryptoHelper = require('./cryptoHelper.cjs');
@@ -542,6 +571,20 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
     console.error('[syncHelper] Error pulling logo setting:', err);
   }
 
+  // Pull school-wide currency setting
+  try {
+    const currencyResult = await supabaseGetSetting(baseUrl, apiKey, 'currency');
+    if (currencyResult.ok && currencyResult.value) {
+      db.prepare(`
+        INSERT INTO settings (key, value)
+        VALUES ('currency', ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+      `).run(currencyResult.value);
+    }
+  } catch (err) {
+    console.error('[syncHelper] Error pulling currency setting:', err);
+  }
+
   // Log the sync attempt
   try {
     const crypto = require('crypto');
@@ -554,6 +597,19 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
     syncedCount: totalSynced,
     errors
   };
+}
+
+async function pushSettingToCloud(projectUrl, apiKey, key, value) {
+  try {
+    const baseUrl = projectUrl.replace(/\/$/, '');
+    const endpoint = `${baseUrl}/rest/v1/settings?on_conflict=key`;
+    const payload = [{ key, value }];
+    const result = await supabaseUpsert(endpoint, apiKey, payload);
+    return result.ok;
+  } catch (err) {
+    console.error('[syncHelper] pushSettingToCloud error:', err.message);
+    return false;
+  }
 }
 
 /**
@@ -594,4 +650,4 @@ async function resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts) {
   return { success: true };
 }
 
-module.exports = { pushPendingRecords, resolveConflictsWithCloud, supabaseGet };
+module.exports = { pushPendingRecords, resolveConflictsWithCloud, supabaseGet, pushSettingToCloud };

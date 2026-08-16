@@ -7,7 +7,7 @@ import Modal from '../components/common/Modal';
 import { FileDown, RefreshCw, Eye, CheckCircle2, XCircle } from 'lucide-react';
 
 export const AssessmentResults = () => {
-  const { showToast } = useApp();
+  const { showToast, user } = useApp();
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedAssessment, setSelectedAssessment] = useState(null);
@@ -18,7 +18,17 @@ export const AssessmentResults = () => {
     try {
       if (window.api) {
         const list = await window.api.getAssessments();
-        setResults(list || []);
+        const isTeacher = user?.role === 'teacher';
+        if (isTeacher) {
+          let assignedClasses = [];
+          try {
+            assignedClasses = JSON.parse(user.assigned_classes_json || '[]');
+          } catch (_) {}
+          const filtered = list.filter(a => assignedClasses.includes(a.student_class));
+          setResults(filtered || []);
+        } else {
+          setResults(list || []);
+        }
       } else {
         setResults([]);
       }
@@ -32,7 +42,7 @@ export const AssessmentResults = () => {
 
   useEffect(() => {
     fetchResults();
-  }, []);
+  }, [user]);
 
   const handleExport = async () => {
     if (window.api?.exportResults) {

@@ -16,7 +16,9 @@ export const SyncSettings = () => {
     licenseActive,
     validateLicense,
     refreshSyncInfo,
-    schoolLogo
+    schoolLogo,
+    currencySetting,
+    updateCurrencySetting
   } = useApp();
 
   const [newKey, setNewKey] = useState('');
@@ -264,7 +266,7 @@ export const SyncSettings = () => {
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px', alignItems: 'center' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '16px', minHeight: '150px', background: 'var(--bg-secondary)' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifycontent: 'center', border: '1px dashed var(--border-color)', borderRadius: '8px', padding: '16px', minHeight: '150px', background: 'var(--bg-secondary)' }}>
               {schoolLogo ? (
                 <img src={schoolLogo} alt="School Logo Preview" style={{ maxWidth: '120px', maxHeight: '100px', objectFit: 'contain', marginBottom: '10px' }} />
               ) : (
@@ -281,6 +283,38 @@ export const SyncSettings = () => {
               </p>
               <div style={{ padding: '10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
                 <strong>Note:</strong> Whenever a cloud sync is executed, your local client will automatically pull and apply any new custom branding set in the owner dashboard.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* School Preferences Card — full width */}
+        <div className="card flex flex-col gap-md" style={{ gridColumn: 'span 2' }}>
+          <div className="flex items-center gap-sm color-primary" style={{ color: 'var(--color-primary)' }}>
+            <Database size={20} />
+            <h3 className="card-title" style={{ marginBottom: 0 }}>School System Preferences</h3>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px', alignItems: 'center' }}>
+            <div className="form-group">
+              <label className="form-label" style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>Active Currency Display</label>
+              <select
+                className="form-select"
+                value={currencySetting}
+                onChange={(e) => updateCurrencySetting(e.target.value)}
+                style={{ ...inputStyle, padding: '10px 12px' }}
+              >
+                <option value="GHS">Ghana Cedis (₵ / GHS)</option>
+                <option value="USD">US Dollars ($ / USD)</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                Select the default currency symbol and ledger formatting for the Tuition &amp; Fees portal and client receipt invoices.
+              </p>
+              <div style={{ padding: '8px 10px', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Currently Active: <strong>{currencySetting === 'GHS' ? '₵ GHS (Ghana Cedis)' : '$ USD (United States Dollars)'}</strong>
               </div>
             </div>
           </div>

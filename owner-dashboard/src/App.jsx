@@ -208,6 +208,8 @@ export default function App() {
   const [loadingData, setLoadingData] = useState(false);
   const [schoolLogo, setSchoolLogo] = useState(null);
   const [isSavingLogo, setIsSavingLogo] = useState(false);
+  const [currencySetting, setCurrencySetting] = useState('GHS');
+  const [isSavingCurrency, setIsSavingCurrency] = useState(false);
 
   // Search/Filters
   const [studentSearch, setStudentSearch] = useState('');
@@ -385,6 +387,21 @@ export default function App() {
         console.warn('Failed to load school logo setting:', err);
       }
 
+      // Gracefully fetch currency preference
+      try {
+        const { data: resCurr, error: resCurrErr } = await client
+          .from('settings')
+          .select('*')
+          .eq('key', 'currency');
+        if (!resCurrErr && resCurr && resCurr.length > 0) {
+          setCurrencySetting(resCurr[0].value);
+        } else {
+          setCurrencySetting('GHS');
+        }
+      } catch (err) {
+        console.warn('Failed to load currency setting:', err);
+      }
+
       // Gracefully fetch tuition records
       try {
         const { data: resTuition, error: resTuitionErr } = await client
@@ -434,6 +451,34 @@ export default function App() {
     } finally {
       setIsSavingLogo(false);
     }
+  };
+
+  const handleUpdateCurrency = async (currency) => {
+    setIsSavingCurrency(true);
+    try {
+      const client = createClient(supabaseUrl, supabaseKey);
+      const { error } = await client
+        .from('settings')
+        .upsert({ key: 'currency', value: currency });
+      if (error) throw error;
+      setCurrencySetting(currency);
+      logAuditEvent(client, loginUsername || 'superadmin', 'change_currency', `School currency changed to ${currency} from owner dashboard console.`);
+      alert(`School currency setting updated to ${currency === 'GHS' ? 'Ghana Cedis' : 'US Dollars'} successfully!`);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to update currency setting: ' + e.message);
+    } finally {
+      setIsSavingCurrency(false);
+    }
+  };
+
+  const formatMoney = (amount) => {
+    const isGHS = currencySetting === 'GHS';
+    return new Intl.NumberFormat(isGHS ? 'en-GH' : 'en-US', {
+      style: 'currency',
+      currency: isGHS ? 'GHS' : 'USD',
+      minimumFractionDigits: 0
+    }).format(amount);
   };
 
   const handleOpenAddQuestion = () => {
@@ -1337,7 +1382,7 @@ export default function App() {
                   <DollarSign size={20} style={{ color: 'var(--color-error)' }} />
                 </div>
                 <div className="card-value">
-                  {new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(totalOutstanding)}
+                  {formatMoney(totalOutstanding)}
                 </div>
                 <div className="card-footer-text">Total school unpaid fees</div>
               </div>
@@ -2264,7 +2309,7 @@ export default function App() {
                   <DollarSign size={20} className="color-primary" />
                 </div>
                 <div className="card-value">
-                  {new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(totalCharged)}
+                  {formatMoney(totalCharged)}
                 </div>
                 <div className="card-footer-text">Gross tuition and fee obligations</div>
               </div>
@@ -2275,7 +2320,7 @@ export default function App() {
                   <Award size={20} style={{ color: 'var(--color-success)' }} />
                 </div>
                 <div className="card-value" style={{ color: 'var(--color-success)' }}>
-                  {new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(totalPaid)}
+                  {formatMoney(totalPaid)}
                 </div>
                 <div className="card-footer-text">Deposited collection receipts</div>
               </div>
@@ -2286,7 +2331,7 @@ export default function App() {
                   <Users size={20} style={{ color: 'var(--color-error)' }} />
                 </div>
                 <div className="card-value" style={{ color: 'var(--color-error)' }}>
-                  {new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(totalOutstanding)}
+                  {formatMoney(totalOutstanding)}
                 </div>
                 <div className="card-footer-text">Receivable balance assets</div>
               </div>
@@ -2405,12 +2450,12 @@ export default function App() {
                           <td>{row.roll_number}</td>
                           <td><strong>{row.name}</strong></td>
                           <td>{row.class}</td>
-                          <td>{new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(row.total_charged)}</td>
+                          <td>{formatMoney(row.total_charged)}</td>
                           <td style={{ color: 'var(--color-success)', fontWeight: 600 }}>
-                            {new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(row.amount_paid)}
+                            {formatMoney(row.amount_paid)}
                           </td>
                           <td style={{ color: row.outstanding > 0 ? 'var(--color-error)' : 'var(--color-success)', fontWeight: 600 }}>
-                            {new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(row.outstanding)}
+                            {formatMoney(row.outstanding)}
                           </td>
                           <td>
                             <span className={`badge ${row.status === 'Paid' ? 'badge-success' : row.status === 'Partially Paid' ? 'badge-warning' : 'badge-error'}`}>
@@ -2548,6 +2593,33 @@ export default function App() {
                     )}
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="card fade-in">
+              <h3 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Database size={20} className="color-primary" />
+                School System Preferences
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '20px' }}>
+                Configure school-wide default preferences. These settings will sync automatically to all branch schools and offline desktop client applications.
+              </p>
+
+              <div className="form-group">
+                <label className="form-label" style={{ fontWeight: 'bold', marginBottom: '8px', display: 'block' }}>Active Currency Display</label>
+                <select
+                  className="form-input"
+                  value={currencySetting}
+                  onChange={e => handleUpdateCurrency(e.target.value)}
+                  style={{ width: '100%' }}
+                  disabled={isSavingCurrency}
+                >
+                  <option value="GHS">Ghana Cedis (₵ / GHS)</option>
+                  <option value="USD">US Dollars ($ / USD)</option>
+                </select>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginTop: '6px' }}>
+                  Select the default currency symbol and ledger formatting for the Tuition &amp; Fees portals.
+                </span>
               </div>
             </div>
           </div>

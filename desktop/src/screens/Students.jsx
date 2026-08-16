@@ -7,7 +7,7 @@ import Badge from '../components/common/Badge';
 import { UserPlus } from 'lucide-react';
 
 export const Students = () => {
-  const { showToast, refreshSyncInfo } = useApp();
+  const { user, showToast, refreshSyncInfo } = useApp();
   const [students, setStudents] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
@@ -20,7 +20,7 @@ export const Students = () => {
 
   const fetchStudents = async () => {
     if (window.api) {
-      const list = await window.api.getStudents();
+      const list = await window.api.getStudents(user?.id);
       // Filter out deleted students
       const active = list.filter(s => s.status !== 'deleted');
       const mapped = active.map(s => ({
@@ -37,7 +37,14 @@ export const Students = () => {
     const loadGrades = async () => {
       if (window.api) {
         const clsList = await window.api.getClasses();
-        const names = clsList.map(c => c.name);
+        let names = clsList.map(c => c.name);
+        if (user?.role === 'teacher') {
+          let assignedClasses = [];
+          try {
+            assignedClasses = JSON.parse(user.assigned_classes_json || '[]');
+          } catch (_) {}
+          names = names.filter(n => assignedClasses.includes(n));
+        }
         setGrades(names);
         if (names.length > 0) {
           setGrade(names[0]);
@@ -45,7 +52,7 @@ export const Students = () => {
       }
     };
     loadGrades();
-  }, []);
+  }, [user]);
 
   const tableColumns = [
     { key: 'roll_number', label: 'Student Roll' },
@@ -84,13 +91,13 @@ export const Students = () => {
   const handleDeletePrompt = async (student) => {
     if (confirm(`WARNING: Are you sure you want to delete student "${student.name}" (Roll: ${student.roll_number})? This will remove them from the active registry.`)) {
       if (window.api) {
-        const res = await window.api.deleteStudent(student.id);
+        const res = await window.api.deleteStudent(student.id, user?.role);
         if (res.success) {
           showToast(`Student "${student.name}" deleted successfully.`, 'success');
           fetchStudents();
           refreshSyncInfo();
         } else {
-          showToast('Failed to delete student.', 'error');
+          showToast(res.error || 'Failed to delete student.', 'error');
         }
       }
     }
@@ -107,7 +114,8 @@ export const Students = () => {
       id: editingStudent ? editingStudent.id : undefined,
       name,
       roll_number: rollNumber,
-      class: grade
+      class: grade,
+      currentUserRole: user?.role
     };
 
     if (window.api) {
@@ -134,9 +142,11 @@ export const Students = () => {
           <h1 className="welcome-heading">Student Registry Manager</h1>
           <p className="welcome-subtext">Register student enrollments, modify classroom assignments, and view profiles.</p>
         </div>
-        <Button variant="primary" onClick={handleOpenAdd} icon={UserPlus}>
-          Register Student
-        </Button>
+        {user?.role !== 'teacher' && (
+          <Button variant="primary" onClick={handleOpenAdd} icon={UserPlus}>
+            Register Student
+          </Button>
+        )}
       </div>
 
       <div className="card" style={{ padding: 0 }}>
@@ -145,8 +155,8 @@ export const Students = () => {
           columns={tableColumns}
           searchPlaceholder="Search student name, roll number, or classroom..."
           itemsPerPage={8}
-          onEdit={handleOpenEdit}
-          onDelete={handleDeletePrompt}
+          onEdit={user?.role === 'teacher' ? undefined : handleOpenEdit}
+          onDelete={user?.role === 'teacher' ? undefined : handleDeletePrompt}
         />
       </div>
 

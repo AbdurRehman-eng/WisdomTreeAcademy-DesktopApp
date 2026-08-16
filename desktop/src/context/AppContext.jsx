@@ -14,6 +14,7 @@ export const AppProvider = ({ children }) => {
   const [activeAssessment, setActiveAssessment] = useState(null);
   const [isPhysicalOffline, setIsPhysicalOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
   const [schoolLogo, setSchoolLogo] = useState(null);
+  const [currencySetting, setCurrencySetting] = useState('GHS');
 
   const syncStatusRef = useRef(syncStatus);
   useEffect(() => {
@@ -33,7 +34,27 @@ export const AppProvider = ({ children }) => {
     refreshLicenseInfo();
     refreshSyncInfo();
     loadSchoolLogo();
+    loadCurrencySetting();
   }, []);
+
+  const loadCurrencySetting = async () => {
+    if (window.api) {
+      const val = await window.api.getSetting('currency');
+      setCurrencySetting(val || 'GHS');
+    }
+  };
+
+  const updateCurrencySetting = async (val) => {
+    if (window.api) {
+      const res = await window.api.saveSetting('currency', val);
+      if (res.success) {
+        setCurrencySetting(val);
+        showToast(`System currency preference updated to ${val === 'GHS' ? 'Ghana Cedis (₵)' : 'US Dollars ($)'}.`, 'success');
+        return true;
+      }
+    }
+    return false;
+  };
 
   const loadSchoolLogo = async () => {
     if (window.api) {
@@ -255,7 +276,9 @@ export const AppProvider = ({ children }) => {
       activeAssessment,
       setActiveAssessment,
       schoolLogo,
-      updateSchoolLogo
+      updateSchoolLogo,
+      currencySetting,
+      updateCurrencySetting
     }}>
       {children}
     </AppContext.Provider>
