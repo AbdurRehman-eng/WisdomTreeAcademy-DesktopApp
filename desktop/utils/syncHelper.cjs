@@ -634,6 +634,13 @@ async function resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts) {
         const remoteRow = result.rows[0];
         const mappedRemote = cfg.mapRow(remoteRow);
 
+        // Delete password_hash if we are updating teachers_admins and the remote has it as null or undefined.
+        // This is to prevent a NOT NULL constraint violation on the local teachers_admins table,
+        // as the local DB schema enforces NOT NULL on password_hash.
+        if (cfg.localTable === 'teachers_admins' && (mappedRemote.password_hash === undefined || mappedRemote.password_hash === null)) {
+          delete mappedRemote.password_hash;
+        }
+
         const keys = Object.keys(mappedRemote).filter(k => k !== 'id');
         const setClauses = keys.map(k => `${k} = ?`).join(', ');
         const values = [...keys.map(k => mappedRemote[k]), 'synced', conflict.id];

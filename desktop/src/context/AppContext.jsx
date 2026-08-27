@@ -152,11 +152,30 @@ export const AppProvider = ({ children }) => {
   };
 
   const triggerSync = async (options = {}) => {
-    if (syncStatus === 'offline') {
-      showToast('Cannot sync in offline mode. Please switch to online first.', 'warning');
+    let currentStatus = syncStatus;
+    if (isPhysicalOffline) {
+      showToast('Cannot sync. No internet connection detected.', 'warning');
       return;
     }
-    if (syncStatus === 'syncing') return;
+
+    if (currentStatus === 'offline') {
+      showToast('Attempting to switch online for synchronization...', 'info');
+      if (window.api) {
+        const res = await window.api.toggleOnline();
+        if (res.success && res.status !== 'offline') {
+          setSyncStatus(res.status);
+          currentStatus = res.status;
+          showToast('System is now Online. Cloud sync is active.', 'info');
+        } else {
+          showToast(res.error || 'Cannot sync. No internet connection detected to the cloud sync database.', 'error');
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+
+    if (currentStatus === 'syncing') return;
 
     // Sanitize options to avoid passing React SyntheticEvent objects through the IPC bridge
     let cleanOptions = {};

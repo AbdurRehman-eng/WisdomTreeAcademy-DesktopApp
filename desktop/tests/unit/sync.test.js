@@ -115,6 +115,91 @@ describe('Sync Conflict Resolution Tests', () => {
     expect(call.args).toContain('S101');
   });
 
+  it('should resolve conflicts on teachers_admins and preserve password_hash if remote is missing/null', async () => {
+    const db = new Database(':memory:');
+
+    // Override the mock prepare function specifically for table info and row fetch
+    const originalPrepare = db.prepare;
+    db.prepare = vi.fn().mockImplementation((sql) => {
+      if (sql.includes("PRAGMA table_info")) {
+        return {
+          all: () => [
+            { name: 'id' },
+            { name: 'username' },
+            { name: 'password_hash' },
+            { name: 'role' },
+            { name: 'name' },
+            { name: 'email' },
+            { name: 'updated_at' }
+          ]
+        };
+      }
+      if (sql.includes("SELECT sync_status, updated_at FROM") || sql.includes("SELECT sync_status FROM")) {
+        return {
+          get: () => ({ sync_status: 'synced', updated_at: 1000 })
+        };
+      }
+      return originalPrepare.call(db, sql);
+    });
+
+    // Mock remote record has name updated but password_hash is missing/null
+    const mockRemoteRecord = {
+      id: 'T101',
+      username: 'teacher1',
+      role: 'teacher',
+      name: 'Teacher One Remote Update',
+      email: 'teacher1@wta.com',
+      updated_at: 2000
+    };
+
+    const mockResponse = {
+      statusCode: 200,
+      on: (event, cb) => {
+        if (event === 'data') {
+          cb(JSON.stringify([mockRemoteRecord]));
+        }
+        if (event === 'end') {
+          cb();
+        }
+      }
+    };
+
+    const mockRequest = {
+      on: vi.fn(),
+      setTimeout: vi.fn(),
+      end: vi.fn()
+    };
+
+    https.request = vi.fn().mockImplementation((options, callback) => {
+      callback(mockResponse);
+      return mockRequest;
+    });
+
+    const conflicts = [
+      {
+        table: 'teachers_admins',
+        id: 'T101',
+        displayName: 'Teacher',
+        localUpdatedAt: 1000,
+        remoteUpdatedAt: 2000
+      }
+    ];
+
+    const result = await resolveConflictsWithCloud(db, 'https://example.supabase.co', 'dummy-key', conflicts);
+
+    expect(result.success).toBe(true);
+
+    // Verify SQL prepared statement and check that password_hash is NOT updated
+    expect(db.runCalls.length).toBe(1);
+    const call = db.runCalls[0];
+    expect(call.sql).toContain('UPDATE teachers_admins SET');
+    expect(call.sql).not.toContain('password_hash = ?');
+    expect(call.sql).toContain('sync_status = ?');
+    expect(call.args).toContain('Teacher One Remote Update');
+    expect(call.args).toContain('synced');
+    expect(call.args).toContain('T101');
+  });
+
   it('should pull remote records and insert them into the local database during pushPendingRecords', async () => {
     const db = new Database(':memory:');
 
