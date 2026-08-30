@@ -1197,16 +1197,45 @@ function registerIpcHandlers() {
         const syncRes = await pushPendingRecords(db, projectUrl, apiKey, false);
         db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
 
+        const getPendingCount = () => {
+          const pendingStudents = db.prepare("SELECT count(*) as count FROM students WHERE sync_status = 'pending'").get().count;
+          const pendingTeachers = db.prepare("SELECT count(*) as count FROM teachers_admins WHERE sync_status = 'pending'").get().count;
+          const pendingClasses = db.prepare("SELECT count(*) as count FROM classes WHERE sync_status = 'pending'").get().count;
+          const pendingSubjects = db.prepare("SELECT count(*) as count FROM subjects WHERE sync_status = 'pending'").get().count;
+          const pendingQuestions = db.prepare("SELECT count(*) as count FROM question_bank WHERE sync_status = 'pending'").get().count;
+          const pendingAssessments = db.prepare("SELECT count(*) as count FROM assessments WHERE sync_status = 'pending'").get().count;
+          const pendingAttendance = db.prepare("SELECT count(*) as count FROM attendance WHERE sync_status = 'pending'").get().count;
+          const pendingStudentTuition = db.prepare("SELECT count(*) as count FROM student_tuition WHERE sync_status = 'pending'").get().count;
+          const pendingTuitionPayments = db.prepare("SELECT count(*) as count FROM tuition_payments WHERE sync_status = 'pending'").get().count;
+          return pendingStudents + pendingTeachers + pendingClasses + pendingSubjects + 
+                 pendingQuestions + pendingAssessments + pendingAttendance + 
+                 pendingStudentTuition + pendingTuitionPayments;
+        };
+
+        const totalPending = getPendingCount();
+
         if (syncRes.success) {
-          return { success: true, syncedCount: syncRes.syncedCount };
+          return { success: true, syncedCount: syncRes.syncedCount, pendingCount: totalPending };
         } else if (syncRes.hasConflicts) {
-          return { success: false, hasConflicts: true, conflicts: syncRes.conflicts };
+          return { success: false, hasConflicts: true, conflicts: syncRes.conflicts, pendingCount: totalPending };
         } else {
-          return { success: false, error: syncRes.errors.join('; '), syncedCount: syncRes.syncedCount };
+          return { success: false, error: syncRes.errors.join('; '), syncedCount: syncRes.syncedCount, pendingCount: totalPending };
         }
       } else {
         db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
-        return { success: false, error: res.error };
+        const pendingStudents = db.prepare("SELECT count(*) as count FROM students WHERE sync_status = 'pending'").get().count;
+        const pendingTeachers = db.prepare("SELECT count(*) as count FROM teachers_admins WHERE sync_status = 'pending'").get().count;
+        const pendingClasses = db.prepare("SELECT count(*) as count FROM classes WHERE sync_status = 'pending'").get().count;
+        const pendingSubjects = db.prepare("SELECT count(*) as count FROM subjects WHERE sync_status = 'pending'").get().count;
+        const pendingQuestions = db.prepare("SELECT count(*) as count FROM question_bank WHERE sync_status = 'pending'").get().count;
+        const pendingAssessments = db.prepare("SELECT count(*) as count FROM assessments WHERE sync_status = 'pending'").get().count;
+        const pendingAttendance = db.prepare("SELECT count(*) as count FROM attendance WHERE sync_status = 'pending'").get().count;
+        const pendingStudentTuition = db.prepare("SELECT count(*) as count FROM student_tuition WHERE sync_status = 'pending'").get().count;
+        const pendingTuitionPayments = db.prepare("SELECT count(*) as count FROM tuition_payments WHERE sync_status = 'pending'").get().count;
+        const totalPending = pendingStudents + pendingTeachers + pendingClasses + pendingSubjects + 
+                             pendingQuestions + pendingAssessments + pendingAttendance + 
+                             pendingStudentTuition + pendingTuitionPayments;
+        return { success: false, error: res.error, pendingCount: totalPending };
       }
     } catch (e) {
       db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'offline')").run();

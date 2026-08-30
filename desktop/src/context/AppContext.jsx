@@ -86,7 +86,11 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const refreshSyncInfo = async () => {
+  const refreshSyncInfo = async (forcedCount = null) => {
+    if (forcedCount !== null) {
+      setPendingSyncCount(forcedCount);
+      return;
+    }
     if (window.api) {
       const info = await window.api.getSyncInfo();
       setPendingSyncCount(info.pendingCount);

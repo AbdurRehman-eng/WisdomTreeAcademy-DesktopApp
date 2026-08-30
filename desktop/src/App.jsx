@@ -59,7 +59,11 @@ function MainAppContent() {
       } else {
         showToast(res.error || 'Failed to complete synchronization.', 'error');
       }
-      await refreshSyncInfo();
+      if (res.pendingCount !== undefined) {
+        await refreshSyncInfo(res.pendingCount);
+      } else {
+        await refreshSyncInfo();
+      }
       setTimeout(refreshSyncInfo, 500);
     }
   };
