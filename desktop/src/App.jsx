@@ -35,7 +35,7 @@ const screenRoles = {
 };
 
 function MainAppContent() {
-  const { user, activeScreen, syncConflicts, setSyncConflicts, triggerSync, showToast, refreshSyncInfo } = useApp();
+  const { user, activeScreen, syncConflicts, setSyncConflicts, triggerSync, showToast, refreshSyncInfo, setSyncStatus } = useApp();
 
   const handleOverwrite = async () => {
     if (confirm('Are you absolutely sure you want to force sync and overwrite the cloud database versions for these records?')) {
@@ -48,6 +48,7 @@ function MainAppContent() {
     showToast('Resolving conflicts and completing database sync...', 'info');
     const conflictsToResolve = [...syncConflicts];
     setSyncConflicts([]);
+    setSyncStatus('syncing');
 
     if (window.api) {
       const res = await window.api.resolveConflicts(conflictsToResolve);
