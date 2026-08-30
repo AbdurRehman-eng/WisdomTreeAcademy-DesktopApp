@@ -19,7 +19,7 @@ export const DesktopShell = ({ children }) => {
         <div className="title-bar-left">
           <Monitor size={14} className="window-icon" />
           <span className="window-title">
-            Wisdom Tree Academy Diagnostic Assessment Software v1.0.4 
+            Wisdom Tree Academy Diagnostic Assessment Software v1.0.5 
             {syncStatus === 'offline' && <span className="window-offline-badge"> [OFFLINE MODE]</span>}
           </span>
         </div>
