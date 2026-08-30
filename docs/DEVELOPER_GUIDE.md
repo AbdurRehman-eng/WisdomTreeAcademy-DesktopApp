@@ -53,11 +53,17 @@ CREATE TABLE IF NOT EXISTS teachers_admins (
   id TEXT PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
-  role TEXT NOT NULL, -- 'admin' | 'teacher'
+  role TEXT NOT NULL, -- 'owner', 'admin', 'it_administrator', etc.
   name TEXT NOT NULL,
   email TEXT,
+  phone_number TEXT,
+  employee_id TEXT,
+  hire_date TEXT,
+  assigned_classes_json TEXT,
+  assigned_subjects_json TEXT,
+  last_login INTEGER,
   status TEXT DEFAULT 'active', -- 'active' | 'deleted'
-  sync_status TEXT DEFAULT 'pending', -- 'synced' | 'pending'
+  sync_status TEXT DEFAULT 'synced',
   updated_at INTEGER NOT NULL
 );
 

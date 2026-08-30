@@ -59,7 +59,8 @@ function MainAppContent() {
       } else {
         showToast(res.error || 'Failed to complete synchronization.', 'error');
       }
-      refreshSyncInfo();
+      await refreshSyncInfo();
+      setTimeout(refreshSyncInfo, 500);
     }
   };
 
@@ -112,7 +113,7 @@ function MainAppContent() {
       {renderScreen()}
       {syncConflicts && syncConflicts.length > 0 && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, backdropFilter: 'blur(4px)' }}>
-          <div style={{ backgroundColor: 'var(--bg-primary, #ffffff)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-color)', width: '90%', maxWidth: '550px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)' }}>
+          <div style={{ backgroundColor: 'var(--bg-surface)', padding: '24px', borderRadius: '12px', border: '1px solid var(--border-color)', width: '90%', maxWidth: '550px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.25)' }}>
             <h3 style={{ color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
               ⚠️ Cloud Sync Conflict Detected
             </h3>

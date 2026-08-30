@@ -17,6 +17,7 @@
   --text-primary: #0F172A;
   --text-secondary: #475569;
   --border-color: #E2E8F0;
+  --bg-secondary: #F1F5F9;
   
   /* Glassmorphism tokens */
   --glass-bg: rgba(255, 255, 255, 0.7);
@@ -58,6 +59,7 @@
   --text-primary: #F8FAFC;
   --text-secondary: #94A3B8;
   --border-color: #1E293B;
+  --bg-secondary: #1E293B;
 
   /* Glassmorphism tokens */
   --glass-bg: rgba(17, 21, 36, 0.75);
