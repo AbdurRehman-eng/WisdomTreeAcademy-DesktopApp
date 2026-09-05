@@ -2,7 +2,7 @@
   "name": "desktop",
   "private": true,
   "type": "module",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "main": "main.cjs",
   "scripts": {
     "dev": "concurrently -k \"npm run dev:frontend\" \"npm run dev:electron\"",
