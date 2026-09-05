@@ -91,7 +91,7 @@ export const Students = () => {
   const handleDeletePrompt = async (student) => {
     if (confirm(`WARNING: Are you sure you want to delete student "${student.name}" (Roll: ${student.roll_number})? This will remove them from the active registry.`)) {
       if (window.api) {
-        const res = await window.api.deleteStudent(student.id, user?.role);
+        const res = await window.api.deleteStudent(student.id, user?.role, user?.id);
         if (res.success) {
           showToast(`Student "${student.name}" deleted successfully.`, 'success');
           fetchStudents();
@@ -115,7 +115,8 @@ export const Students = () => {
       name,
       roll_number: rollNumber,
       class: grade,
-      currentUserRole: user?.role
+      currentUserRole: user?.role,
+      currentUserId: user?.id
     };
 
     if (window.api) {

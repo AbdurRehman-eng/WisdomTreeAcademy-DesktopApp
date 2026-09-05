@@ -303,8 +303,9 @@ function seedDatabase() {
     insertSubj.run(`S_${sub.replace(/\s+/g, '_')}`, sub, now);
   });
 
-  // Deactivate the old 'English' subject since it is now split
-  db.prepare("UPDATE subjects SET status = 'deleted', updated_at = ? WHERE name = 'English'").run(now);
+  // Deactivate the old 'English' subject and leftover test entries
+  db.prepare("UPDATE subjects SET status = 'deleted', updated_at = ? WHERE name IN ('English', 'Test Subject')").run(now);
+  db.prepare("UPDATE classes SET status = 'deleted', updated_at = ? WHERE name IN ('Grade 1 Alpha', 'Grade 2 Alpha')").run(now);
 
   // Seed default settings if empty
   const licenseCheck = db.prepare("SELECT count(*) as count FROM settings WHERE key = 'license_key'").get();
@@ -466,7 +467,7 @@ function registerIpcHandlers() {
     }
   });
   ipcMain.handle('db:save-student', (event, student) => {
-    const { id, name, roll_number, class: cls, currentUserRole } = student;
+    const { id, name, roll_number, class: cls, currentUserRole, currentUserId } = student;
     if (currentUserRole === 'teacher') {
       return { success: false, error: 'Unauthorized: Teachers cannot register or edit student records.' };
     }
@@ -482,14 +483,18 @@ function registerIpcHandlers() {
         sync_status = 'pending',
         updated_at = excluded.updated_at
     `).run(idToUse, name, roll_number, cls, now);
+
+    writeAuditLog(currentUserId || 'unknown', id ? 'UPDATE_STUDENT' : 'CREATE_STUDENT', `${id ? 'Updated' : 'Registered'} student "${name}" (Roll: ${roll_number}, Class: ${cls})`);
     return { success: true, id: idToUse };
   });
-  ipcMain.handle('db:delete-student', (event, id, currentUserRole) => {
+  ipcMain.handle('db:delete-student', (event, id, currentUserRole, currentUserId) => {
     if (currentUserRole === 'teacher') {
       return { success: false, error: 'Unauthorized: Teachers cannot delete student records.' };
     }
     const now = Date.now();
+    const existing = db.prepare("SELECT name, roll_number FROM students WHERE id = ?").get(id);
     db.prepare("UPDATE students SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
+    writeAuditLog(currentUserId || 'unknown', 'DELETE_STUDENT', `Deleted student "${existing ? existing.name : id}" (${existing ? existing.roll_number : id})`);
     return { success: true };
   });
 
@@ -681,17 +686,18 @@ function registerIpcHandlers() {
 
   // Classes & Subjects
   ipcMain.handle('db:get-classes', () => {
-    return db.prepare("SELECT * FROM classes WHERE status = 'active'").all();
+    return db.prepare("SELECT * FROM classes WHERE status != 'deleted'").all();
   });
   ipcMain.handle('db:save-class', (event, cls) => {
-    const { id, name } = cls;
+    const { id, name, status } = cls;
     const now = Date.now();
     const idToUse = id || crypto.randomUUID();
+    const targetStatus = status || 'active';
     db.prepare(`
       INSERT INTO classes (id, name, status, sync_status, updated_at)
-      VALUES (?, ?, 'active', 'pending', ?)
-      ON CONFLICT(id) DO UPDATE SET name = excluded.name, sync_status = 'pending', updated_at = excluded.updated_at
-    `).run(idToUse, name, now);
+      VALUES (?, ?, ?, 'pending', ?)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, status = excluded.status, sync_status = 'pending', updated_at = excluded.updated_at
+    `).run(idToUse, name, targetStatus, now);
     return { success: true, id: idToUse };
   });
   ipcMain.handle('db:delete-class', (event, id) => {
@@ -701,17 +707,18 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('db:get-subjects', () => {
-    return db.prepare("SELECT * FROM subjects WHERE status = 'active'").all();
+    return db.prepare("SELECT * FROM subjects WHERE status != 'deleted'").all();
   });
   ipcMain.handle('db:save-subject', (event, subject) => {
-    const { id, name } = subject;
+    const { id, name, status } = subject;
     const now = Date.now();
     const idToUse = id || crypto.randomUUID();
+    const targetStatus = status || 'active';
     db.prepare(`
       INSERT INTO subjects (id, name, status, sync_status, updated_at)
-      VALUES (?, ?, 'active', 'pending', ?)
-      ON CONFLICT(id) DO UPDATE SET name = excluded.name, sync_status = 'pending', updated_at = excluded.updated_at
-    `).run(idToUse, name, now);
+      VALUES (?, ?, ?, 'pending', ?)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, status = excluded.status, sync_status = 'pending', updated_at = excluded.updated_at
+    `).run(idToUse, name, targetStatus, now);
     return { success: true, id: idToUse };
   });
   ipcMain.handle('db:delete-subject', (event, id) => {
@@ -1434,12 +1441,14 @@ function registerIpcHandlers() {
       recentAssessmentsQuery += ` ORDER BY a.updated_at DESC LIMIT 5`;
       recentAttendanceQuery += ` ORDER BY a.updated_at DESC LIMIT 5`;
 
+      const currentUserLabel = (user && ['owner', 'admin', 'it_administrator', 'head_teacher'].includes(user.role)) ? 'Administrator' : 'Teacher';
+
       const recentAssessments = db.prepare(recentAssessmentsQuery).all(...recentAssessmentsParams);
       recentAssessments.forEach(x => {
         activityLog.push({
           type: 'assessment',
           message: `${x.student_name} completed Diagnostic Assessment (${x.score}/${x.total_questions})`,
-          user: 'Teacher',
+          user: currentUserLabel,
           timestamp: x.updated_at
         });
       });
@@ -1449,7 +1458,7 @@ function registerIpcHandlers() {
         activityLog.push({
           type: 'attendance',
           message: `Attendance marked ${x.status} for ${x.name} (${x.date})`,
-          user: 'Teacher',
+          user: currentUserLabel,
           timestamp: x.updated_at
         });
       });
