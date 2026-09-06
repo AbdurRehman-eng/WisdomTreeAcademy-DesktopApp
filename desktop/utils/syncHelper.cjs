@@ -455,28 +455,43 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
       const endpoint = `${baseUrl}/rest/v1/${cfg.remoteTable}${urlParams}`;
       let result = await supabaseUpsert(endpoint, apiKey, payload);
 
-      // Auto-heal schema mismatches if remote table is missing a column (PGRST204)
+      // Auto-heal schema mismatches if remote table is missing a column (PGRST204).
+      // Strip the offending column and retry silently — only surface an error if the
+      // SECOND attempt also fails.
       if (!result.ok && result.status === 400 && result.body && result.body.includes('PGRST204')) {
         const match = result.body.match(/Could not find the ['"]([^'"]+)['"] column/i);
         if (match && match[1]) {
           const missingCol = match[1];
-          console.warn(`[syncHelper] Remote table '${cfg.remoteTable}' missing column '${missingCol}'. Stripping column and retrying upsert...`);
+          console.warn(`[syncHelper] Remote table '${cfg.remoteTable}' missing column '${missingCol}'. Stripping and retrying silently...`);
           payload = payload.map(r => {
             const copy = { ...r };
             delete copy[missingCol];
             return copy;
           });
           result = await supabaseUpsert(endpoint, apiKey, payload);
+          // Only report error if the retry also failed
+          if (!result.ok) {
+            const errMsg = `${cfg.remoteTable}: HTTP ${result.status} — ${result.body.substring(0, 200)}`;
+            errors.push(errMsg);
+            console.error('[syncHelper] Auto-heal retry also failed:', errMsg);
+          } else {
+            console.log(`[syncHelper] Auto-heal succeeded for '${cfg.remoteTable}' (stripped '${missingCol}')`);
+          }
+        } else {
+          // PGRST204 but no column name matched — report as error
+          const errMsg = `${cfg.remoteTable}: HTTP ${result.status} — ${result.body.substring(0, 200)}`;
+          errors.push(errMsg);
+          console.error('[syncHelper] Upsert error (PGRST204, no column match):', errMsg);
         }
+      } else if (!result.ok) {
+        const errMsg = `${cfg.remoteTable}: HTTP ${result.status} — ${result.body.substring(0, 200)}`;
+        errors.push(errMsg);
+        console.error('[syncHelper] Upsert error:', errMsg);
       }
 
       if (result.ok) {
         db.prepare(cfg.markSynced).run();
         totalSynced += rows.length;
-      } else {
-        const errMsg = `${cfg.remoteTable}: HTTP ${result.status} — ${result.body.substring(0, 200)}`;
-        errors.push(errMsg);
-        console.error('[syncHelper] Upsert error:', errMsg);
       }
     } catch (err) {
       const errMsg = `${cfg.remoteTable}: ${err.message}`;
@@ -485,7 +500,16 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
     }
   }
 
-  // 2.5. Pull Phase (download all records from cloud)
+  // 2.5. Pull Phase — download all records from cloud and merge into local DB.
+  //
+  // Safety rules to prevent data reversion:
+  //   A. If a local row has sync_status = 'pending', skip it — it has unsent local changes.
+  //   B. If the local row's updated_at >= the remote row's updated_at, skip — local is
+  //      at least as fresh. This prevents a freshly-pushed row being immediately overwritten
+  //      by the cloud's copy (which may lag behind by milliseconds in propagation).
+  //   C. If a remote row has status = 'deleted' and does NOT exist locally, do NOT insert
+  //      it — this prevents ghost re-insertion of students/records that were deleted locally
+  //      and already pushed.
   for (const cfg of TABLES_CONFIG) {
     try {
       const endpoint = `${baseUrl}/rest/v1/${cfg.remoteTable}`;
@@ -522,12 +546,20 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
               idMismatchedRow = db.prepare(`SELECT ${selectMismatchedCols} FROM ${cfg.localTable} WHERE ${clauses}`).get(...params);
               
               if (idMismatchedRow) {
-                // Heals the local ID mismatch: update local ID to remote ID!
+                // Heals the local ID mismatch: update local ID to remote ID
                 db.prepare(`UPDATE ${cfg.localTable} SET id = ? WHERE id = ?`).run(filteredRow.id, idMismatchedRow.id);
                 localRow = db.prepare(`SELECT ${selectCols} FROM ${cfg.localTable} WHERE id = ?`).get(filteredRow.id);
               }
             }
+
             if (!localRow) {
+              // SAFETY RULE C: Do NOT re-insert a remotely-deleted row that doesn't exist
+              // locally. This prevents ghost resurrection of deleted students/records.
+              if (filteredRow.status === 'deleted') {
+                console.log(`[syncHelper] Skipping remote-deleted row ${filteredRow.id} (${cfg.localTable}) — not inserting ghost.`);
+                continue;
+              }
+
               if (cfg.localTable === 'teachers_admins' && (filteredRow.password_hash === undefined || filteredRow.password_hash === null)) {
                 const cryptoHelper = require('./cryptoHelper.cjs');
                 filteredRow.password_hash = cryptoHelper.hashPassword('wisdom123');
@@ -543,7 +575,9 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
               `).run(...values);
               pulledCount++;
             } else {
+              // SAFETY RULE A: Skip rows with pending local changes.
               if (localRow.sync_status === 'pending') {
+                console.log(`[syncHelper] Skipping pull for ${cfg.localTable} id=${filteredRow.id} — local has pending changes.`);
                 continue;
               }
 
@@ -553,10 +587,12 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
 
               const hasUpdatedAt = filteredRow.updated_at !== undefined && filteredRow.updated_at !== null;
               const remoteTime = parseTimestamp(filteredRow.updated_at);
-              const localTime = parseTimestamp(localRow.updated_at);
-              const shouldUpdate = hasUpdatedAt 
-                ? remoteTime > localTime
-                : true;
+              const localTime  = parseTimestamp(localRow.updated_at);
+
+              // SAFETY RULE B: Only overwrite if remote is strictly newer than local.
+              // Using strict > (not >=) prevents overwriting a row that was just pushed
+              // (same timestamp) or is locally newer.
+              const shouldUpdate = hasUpdatedAt ? remoteTime > localTime : true;
 
               if (shouldUpdate) {
                 if (cfg.localTable === 'teachers_admins' && (filteredRow.password_hash === undefined || filteredRow.password_hash === null)) {
@@ -653,7 +689,8 @@ async function pushSettingToCloud(projectUrl, apiKey, key, value) {
 }
 
 /**
- * Resolve conflicts by keeping cloud version of the specified records.
+ * Resolve conflicts by keeping cloud version of the specified records ("Overwrite Local").
+ * The local row is updated with the remote data and marked 'synced'.
  */
 async function resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts) {
   if (!projectUrl || !apiKey || !conflicts || conflicts.length === 0) {
@@ -674,9 +711,7 @@ async function resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts) {
         const remoteRow = result.rows[0];
         const mappedRemote = cfg.mapRow(remoteRow);
 
-        // Delete password_hash if we are updating teachers_admins and the remote has it as null or undefined.
-        // This is to prevent a NOT NULL constraint violation on the local teachers_admins table,
-        // as the local DB schema enforces NOT NULL on password_hash.
+        // Protect password_hash from being nulled out on teachers_admins
         if (cfg.localTable === 'teachers_admins' && (mappedRemote.password_hash === undefined || mappedRemote.password_hash === null)) {
           delete mappedRemote.password_hash;
         }
@@ -697,4 +732,36 @@ async function resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts) {
   return { success: true };
 }
 
-module.exports = { pushPendingRecords, resolveConflictsWithCloud, supabaseGet, pushSettingToCloud };
+/**
+ * Resolve conflicts by keeping the LOCAL version ("Overwrite Cloud").
+ * Mark each conflicted row as 'pending' with a bumped updated_at so:
+ *   1. The follow-on push phase will pick it up and send it to cloud.
+ *   2. The Pull Phase will skip it (pending rule A) and won't overwrite it back.
+ */
+function resolveConflictsKeepLocal(db, conflicts) {
+  if (!conflicts || conflicts.length === 0) return { success: true };
+
+  try {
+    const now = Date.now();
+    for (const conflict of conflicts) {
+      const cfg = TABLES_CONFIG.find(c => c.localTable === conflict.table);
+      if (!cfg) continue;
+
+      // Bump updated_at and mark pending so the push phase sends this row
+      // and the Pull Phase won't re-overwrite it (pending rule A).
+      db.prepare(`
+        UPDATE ${conflict.table}
+        SET sync_status = 'pending', updated_at = ?
+        WHERE id = ?
+      `).run(now, conflict.id);
+      console.log(`[syncHelper] Marked ${conflict.table} id=${conflict.id} as pending for "Overwrite Cloud" resolution.`);
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('[syncHelper] resolveConflictsKeepLocal error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+module.exports = { pushPendingRecords, resolveConflictsWithCloud, resolveConflictsKeepLocal, supabaseGet, pushSettingToCloud };
+

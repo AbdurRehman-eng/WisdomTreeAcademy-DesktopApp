@@ -256,6 +256,16 @@ function initDatabase() {
   }
   // Seed initial data if empty
   seedDatabase();
+
+  // Always-run migration: ensure leftover test/placeholder entries are deactivated
+  // on every startup (not just on first seed), so existing databases are cleaned up too.
+  try {
+    const now = Date.now();
+    db.prepare("UPDATE subjects SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE name IN ('English', 'Test Subject') AND status != 'deleted'").run(now);
+    db.prepare("UPDATE classes  SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE name IN ('Grade 1 Alpha', 'Grade 2 Alpha') AND status != 'deleted'").run(now);
+  } catch (migErr) {
+    console.error('[initDatabase] Migration error cleaning test entries:', migErr);
+  }
 }
 
 function seedDatabase() {
@@ -1188,6 +1198,10 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('sync:resolve-conflicts', async (event, conflicts) => {
+    // Each conflict object has a 'direction' field:
+    //   'keep_local'  → user chose "Overwrite Cloud" (push local data to cloud)
+    //   'keep_cloud'  → user chose "Overwrite Local" (accept cloud data, discard local)
+    // Default: keep_cloud (legacy behaviour)
     try {
       db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'syncing')").run();
 
@@ -1196,53 +1210,57 @@ function registerIpcHandlers() {
       const projectUrl = urlRow ? urlRow.value : '';
       const apiKey     = keyRow ? keyRow.value : '';
 
-      const { resolveConflictsWithCloud, pushPendingRecords } = require('./utils/syncHelper.cjs');
-      const res = await resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts);
+      const { resolveConflictsWithCloud, resolveConflictsKeepLocal, pushPendingRecords } = require('./utils/syncHelper.cjs');
 
-      if (res.success) {
-        // Re-trigger sync immediately to flush the remaining pending records
-        const syncRes = await pushPendingRecords(db, projectUrl, apiKey, false);
-        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+      // Split conflicts by direction
+      const keepLocalConflicts = conflicts.filter(c => c.direction === 'keep_local');
+      const keepCloudConflicts = conflicts.filter(c => c.direction !== 'keep_local');
 
-        const getPendingCount = () => {
-          const pendingStudents = db.prepare("SELECT count(*) as count FROM students WHERE sync_status = 'pending'").get().count;
-          const pendingTeachers = db.prepare("SELECT count(*) as count FROM teachers_admins WHERE sync_status = 'pending'").get().count;
-          const pendingClasses = db.prepare("SELECT count(*) as count FROM classes WHERE sync_status = 'pending'").get().count;
-          const pendingSubjects = db.prepare("SELECT count(*) as count FROM subjects WHERE sync_status = 'pending'").get().count;
-          const pendingQuestions = db.prepare("SELECT count(*) as count FROM question_bank WHERE sync_status = 'pending'").get().count;
-          const pendingAssessments = db.prepare("SELECT count(*) as count FROM assessments WHERE sync_status = 'pending'").get().count;
-          const pendingAttendance = db.prepare("SELECT count(*) as count FROM attendance WHERE sync_status = 'pending'").get().count;
-          const pendingStudentTuition = db.prepare("SELECT count(*) as count FROM student_tuition WHERE sync_status = 'pending'").get().count;
-          const pendingTuitionPayments = db.prepare("SELECT count(*) as count FROM tuition_payments WHERE sync_status = 'pending'").get().count;
-          return pendingStudents + pendingTeachers + pendingClasses + pendingSubjects + 
-                 pendingQuestions + pendingAssessments + pendingAttendance + 
-                 pendingStudentTuition + pendingTuitionPayments;
-        };
-
-        const totalPending = getPendingCount();
-
-        if (syncRes.success) {
-          return { success: true, syncedCount: syncRes.syncedCount, pendingCount: totalPending };
-        } else if (syncRes.hasConflicts) {
-          return { success: false, hasConflicts: true, conflicts: syncRes.conflicts, pendingCount: totalPending };
-        } else {
-          return { success: false, error: syncRes.errors.join('; '), syncedCount: syncRes.syncedCount, pendingCount: totalPending };
+      // For "Overwrite Cloud": bump local updated_at and mark pending → push will send them
+      if (keepLocalConflicts.length > 0) {
+        const klRes = resolveConflictsKeepLocal(db, keepLocalConflicts);
+        if (!klRes.success) {
+          db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+          return { success: false, error: klRes.error };
         }
+      }
+
+      // For "Overwrite Local": download and apply the cloud version
+      if (keepCloudConflicts.length > 0) {
+        const kcRes = await resolveConflictsWithCloud(db, projectUrl, apiKey, keepCloudConflicts);
+        if (!kcRes.success) {
+          db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+          return { success: false, error: kcRes.error };
+        }
+      }
+
+      // Re-trigger sync with force=true to flush all pending records (including keep_local ones)
+      const syncRes = await pushPendingRecords(db, projectUrl, apiKey, true);
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+
+      const getPendingCount = () => {
+        const counts = [
+          "SELECT count(*) as count FROM students WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM teachers_admins WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM classes WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM subjects WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM question_bank WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM assessments WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM attendance WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM student_tuition WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM tuition_payments WHERE sync_status = 'pending'"
+        ];
+        return counts.reduce((total, sql) => total + db.prepare(sql).get().count, 0);
+      };
+
+      const totalPending = getPendingCount();
+
+      if (syncRes.success) {
+        return { success: true, syncedCount: syncRes.syncedCount, pendingCount: totalPending };
+      } else if (syncRes.hasConflicts) {
+        return { success: false, hasConflicts: true, conflicts: syncRes.conflicts, pendingCount: totalPending };
       } else {
-        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
-        const pendingStudents = db.prepare("SELECT count(*) as count FROM students WHERE sync_status = 'pending'").get().count;
-        const pendingTeachers = db.prepare("SELECT count(*) as count FROM teachers_admins WHERE sync_status = 'pending'").get().count;
-        const pendingClasses = db.prepare("SELECT count(*) as count FROM classes WHERE sync_status = 'pending'").get().count;
-        const pendingSubjects = db.prepare("SELECT count(*) as count FROM subjects WHERE sync_status = 'pending'").get().count;
-        const pendingQuestions = db.prepare("SELECT count(*) as count FROM question_bank WHERE sync_status = 'pending'").get().count;
-        const pendingAssessments = db.prepare("SELECT count(*) as count FROM assessments WHERE sync_status = 'pending'").get().count;
-        const pendingAttendance = db.prepare("SELECT count(*) as count FROM attendance WHERE sync_status = 'pending'").get().count;
-        const pendingStudentTuition = db.prepare("SELECT count(*) as count FROM student_tuition WHERE sync_status = 'pending'").get().count;
-        const pendingTuitionPayments = db.prepare("SELECT count(*) as count FROM tuition_payments WHERE sync_status = 'pending'").get().count;
-        const totalPending = pendingStudents + pendingTeachers + pendingClasses + pendingSubjects + 
-                             pendingQuestions + pendingAssessments + pendingAttendance + 
-                             pendingStudentTuition + pendingTuitionPayments;
-        return { success: false, error: res.error, pendingCount: totalPending };
+        return { success: false, error: syncRes.errors.join('; '), syncedCount: syncRes.syncedCount, pendingCount: totalPending };
       }
     } catch (e) {
       db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'offline')").run();
@@ -1441,7 +1459,9 @@ function registerIpcHandlers() {
       recentAssessmentsQuery += ` ORDER BY a.updated_at DESC LIMIT 5`;
       recentAttendanceQuery += ` ORDER BY a.updated_at DESC LIMIT 5`;
 
-      const currentUserLabel = (user && ['owner', 'admin', 'it_administrator', 'head_teacher'].includes(user.role)) ? 'Administrator' : 'Teacher';
+      // Use the actual logged-in user's display name so the activity log correctly
+      // attributes assessments and registrations to the right person.
+      const currentUserLabel = user ? (user.name || user.username || 'System') : 'System';
 
       const recentAssessments = db.prepare(recentAssessmentsQuery).all(...recentAssessmentsParams);
       recentAssessments.forEach(x => {
