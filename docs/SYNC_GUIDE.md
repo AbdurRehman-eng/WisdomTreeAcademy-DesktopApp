@@ -46,10 +46,17 @@ CREATE TABLE IF NOT EXISTS students (
 -- Teachers / Admins
 CREATE TABLE IF NOT EXISTS teachers_admins (
   id TEXT PRIMARY KEY,
-  username TEXT NOT NULL,
-  role TEXT,
-  name TEXT,
+  username TEXT UNIQUE NOT NULL,
+  password_hash TEXT,
+  role TEXT NOT NULL,
+  name TEXT NOT NULL,
   email TEXT,
+  phone_number TEXT,
+  employee_id TEXT,
+  hire_date TEXT,
+  assigned_classes_json TEXT,
+  assigned_subjects_json TEXT,
+  last_login BIGINT,
   status TEXT DEFAULT 'active',
   updated_at BIGINT
 );
@@ -124,6 +131,31 @@ CREATE TABLE IF NOT EXISTS tuition_payments (
   payment_date TEXT NOT NULL,
   payment_method TEXT NOT NULL,
   notes TEXT,
+  updated_at BIGINT
+);
+
+-- Audit Logs
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT,
+  action TEXT NOT NULL,
+  details TEXT,
+  timestamp BIGINT
+);
+
+-- Question Versions
+CREATE TABLE IF NOT EXISTS question_versions (
+  id TEXT PRIMARY KEY,
+  question_id TEXT NOT NULL,
+  class TEXT NOT NULL,
+  subject TEXT NOT NULL,
+  text TEXT NOT NULL,
+  audio_text TEXT,
+  options_json TEXT NOT NULL,
+  correct_answer TEXT NOT NULL,
+  difficulty TEXT DEFAULT 'Medium',
+  version_number INTEGER NOT NULL,
+  changed_by TEXT NOT NULL,
   updated_at BIGINT
 );
 ```

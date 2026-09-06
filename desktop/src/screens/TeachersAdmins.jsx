@@ -61,7 +61,13 @@ export const TeachersAdmins = () => {
     { key: 'role', label: 'Role', render: (val) => <Badge variant={['owner', 'admin'].includes(val) ? 'warning' : 'primary'}>{val.toUpperCase()}</Badge> },
     { key: 'email', label: 'Email', render: (val) => val || 'N/A' },
     { key: 'phone_number', label: 'Phone', render: (val) => val || 'N/A' },
-    { key: 'last_login', label: 'Last Login', render: (val) => val ? new Date(Number(val)).toLocaleString() : 'Never' },
+    { key: 'last_login', label: 'Last Login', render: (val) => {
+        if (!val) return 'Never';
+        const num = Number(val);
+        const date = !isNaN(num) ? new Date(num) : new Date(val);
+        return !isNaN(date.getTime()) ? date.toLocaleString() : 'Never';
+      } 
+    },
     { key: 'status', label: 'Status', render: (val) => {
         let badgeVariant = 'success';
         if (val === 'suspended') badgeVariant = 'danger';

@@ -256,6 +256,16 @@ function initDatabase() {
   }
   // Seed initial data if empty
   seedDatabase();
+
+  // Always-run migration: ensure leftover test/placeholder entries are deactivated
+  // on every startup (not just on first seed), so existing databases are cleaned up too.
+  try {
+    const now = Date.now();
+    db.prepare("UPDATE subjects SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE name IN ('English', 'Test Subject') AND status != 'deleted'").run(now);
+    db.prepare("UPDATE classes  SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE name IN ('Grade 1 Alpha', 'Grade 2 Alpha') AND status != 'deleted'").run(now);
+  } catch (migErr) {
+    console.error('[initDatabase] Migration error cleaning test entries:', migErr);
+  }
 }
 
 function seedDatabase() {
@@ -303,8 +313,9 @@ function seedDatabase() {
     insertSubj.run(`S_${sub.replace(/\s+/g, '_')}`, sub, now);
   });
 
-  // Deactivate the old 'English' subject since it is now split
-  db.prepare("UPDATE subjects SET status = 'deleted', updated_at = ? WHERE name = 'English'").run(now);
+  // Deactivate the old 'English' subject and leftover test entries
+  db.prepare("UPDATE subjects SET status = 'deleted', updated_at = ? WHERE name IN ('English', 'Test Subject')").run(now);
+  db.prepare("UPDATE classes SET status = 'deleted', updated_at = ? WHERE name IN ('Grade 1 Alpha', 'Grade 2 Alpha')").run(now);
 
   // Seed default settings if empty
   const licenseCheck = db.prepare("SELECT count(*) as count FROM settings WHERE key = 'license_key'").get();
@@ -466,7 +477,7 @@ function registerIpcHandlers() {
     }
   });
   ipcMain.handle('db:save-student', (event, student) => {
-    const { id, name, roll_number, class: cls, currentUserRole } = student;
+    const { id, name, roll_number, class: cls, currentUserRole, currentUserId } = student;
     if (currentUserRole === 'teacher') {
       return { success: false, error: 'Unauthorized: Teachers cannot register or edit student records.' };
     }
@@ -482,14 +493,18 @@ function registerIpcHandlers() {
         sync_status = 'pending',
         updated_at = excluded.updated_at
     `).run(idToUse, name, roll_number, cls, now);
+
+    writeAuditLog(currentUserId || 'unknown', id ? 'UPDATE_STUDENT' : 'CREATE_STUDENT', `${id ? 'Updated' : 'Registered'} student "${name}" (Roll: ${roll_number}, Class: ${cls})`);
     return { success: true, id: idToUse };
   });
-  ipcMain.handle('db:delete-student', (event, id, currentUserRole) => {
+  ipcMain.handle('db:delete-student', (event, id, currentUserRole, currentUserId) => {
     if (currentUserRole === 'teacher') {
       return { success: false, error: 'Unauthorized: Teachers cannot delete student records.' };
     }
     const now = Date.now();
+    const existing = db.prepare("SELECT name, roll_number FROM students WHERE id = ?").get(id);
     db.prepare("UPDATE students SET status = 'deleted', sync_status = 'pending', updated_at = ? WHERE id = ?").run(now, id);
+    writeAuditLog(currentUserId || 'unknown', 'DELETE_STUDENT', `Deleted student "${existing ? existing.name : id}" (${existing ? existing.roll_number : id})`);
     return { success: true };
   });
 
@@ -681,17 +696,18 @@ function registerIpcHandlers() {
 
   // Classes & Subjects
   ipcMain.handle('db:get-classes', () => {
-    return db.prepare("SELECT * FROM classes WHERE status = 'active'").all();
+    return db.prepare("SELECT * FROM classes WHERE status != 'deleted'").all();
   });
   ipcMain.handle('db:save-class', (event, cls) => {
-    const { id, name } = cls;
+    const { id, name, status } = cls;
     const now = Date.now();
     const idToUse = id || crypto.randomUUID();
+    const targetStatus = status || 'active';
     db.prepare(`
       INSERT INTO classes (id, name, status, sync_status, updated_at)
-      VALUES (?, ?, 'active', 'pending', ?)
-      ON CONFLICT(id) DO UPDATE SET name = excluded.name, sync_status = 'pending', updated_at = excluded.updated_at
-    `).run(idToUse, name, now);
+      VALUES (?, ?, ?, 'pending', ?)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, status = excluded.status, sync_status = 'pending', updated_at = excluded.updated_at
+    `).run(idToUse, name, targetStatus, now);
     return { success: true, id: idToUse };
   });
   ipcMain.handle('db:delete-class', (event, id) => {
@@ -701,17 +717,18 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('db:get-subjects', () => {
-    return db.prepare("SELECT * FROM subjects WHERE status = 'active'").all();
+    return db.prepare("SELECT * FROM subjects WHERE status != 'deleted'").all();
   });
   ipcMain.handle('db:save-subject', (event, subject) => {
-    const { id, name } = subject;
+    const { id, name, status } = subject;
     const now = Date.now();
     const idToUse = id || crypto.randomUUID();
+    const targetStatus = status || 'active';
     db.prepare(`
       INSERT INTO subjects (id, name, status, sync_status, updated_at)
-      VALUES (?, ?, 'active', 'pending', ?)
-      ON CONFLICT(id) DO UPDATE SET name = excluded.name, sync_status = 'pending', updated_at = excluded.updated_at
-    `).run(idToUse, name, now);
+      VALUES (?, ?, ?, 'pending', ?)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, status = excluded.status, sync_status = 'pending', updated_at = excluded.updated_at
+    `).run(idToUse, name, targetStatus, now);
     return { success: true, id: idToUse };
   });
   ipcMain.handle('db:delete-subject', (event, id) => {
@@ -1181,6 +1198,10 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle('sync:resolve-conflicts', async (event, conflicts) => {
+    // Each conflict object has a 'direction' field:
+    //   'keep_local'  → user chose "Overwrite Cloud" (push local data to cloud)
+    //   'keep_cloud'  → user chose "Overwrite Local" (accept cloud data, discard local)
+    // Default: keep_cloud (legacy behaviour)
     try {
       db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'syncing')").run();
 
@@ -1189,24 +1210,57 @@ function registerIpcHandlers() {
       const projectUrl = urlRow ? urlRow.value : '';
       const apiKey     = keyRow ? keyRow.value : '';
 
-      const { resolveConflictsWithCloud, pushPendingRecords } = require('./utils/syncHelper.cjs');
-      const res = await resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts);
+      const { resolveConflictsWithCloud, resolveConflictsKeepLocal, pushPendingRecords } = require('./utils/syncHelper.cjs');
 
-      if (res.success) {
-        // Re-trigger sync immediately to flush the remaining pending records
-        const syncRes = await pushPendingRecords(db, projectUrl, apiKey, false);
-        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+      // Split conflicts by direction
+      const keepLocalConflicts = conflicts.filter(c => c.direction === 'keep_local');
+      const keepCloudConflicts = conflicts.filter(c => c.direction !== 'keep_local');
 
-        if (syncRes.success) {
-          return { success: true, syncedCount: syncRes.syncedCount };
-        } else if (syncRes.hasConflicts) {
-          return { success: false, hasConflicts: true, conflicts: syncRes.conflicts };
-        } else {
-          return { success: false, error: syncRes.errors.join('; '), syncedCount: syncRes.syncedCount };
+      // For "Overwrite Cloud": bump local updated_at and mark pending → push will send them
+      if (keepLocalConflicts.length > 0) {
+        const klRes = resolveConflictsKeepLocal(db, keepLocalConflicts);
+        if (!klRes.success) {
+          db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+          return { success: false, error: klRes.error };
         }
+      }
+
+      // For "Overwrite Local": download and apply the cloud version
+      if (keepCloudConflicts.length > 0) {
+        const kcRes = await resolveConflictsWithCloud(db, projectUrl, apiKey, keepCloudConflicts);
+        if (!kcRes.success) {
+          db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+          return { success: false, error: kcRes.error };
+        }
+      }
+
+      // Re-trigger sync with force=true to flush all pending records (including keep_local ones)
+      const syncRes = await pushPendingRecords(db, projectUrl, apiKey, true);
+      db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
+
+      const getPendingCount = () => {
+        const counts = [
+          "SELECT count(*) as count FROM students WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM teachers_admins WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM classes WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM subjects WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM question_bank WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM assessments WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM attendance WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM student_tuition WHERE sync_status = 'pending'",
+          "SELECT count(*) as count FROM tuition_payments WHERE sync_status = 'pending'"
+        ];
+        return counts.reduce((total, sql) => total + db.prepare(sql).get().count, 0);
+      };
+
+      const totalPending = getPendingCount();
+
+      if (syncRes.success) {
+        return { success: true, syncedCount: syncRes.syncedCount, pendingCount: totalPending };
+      } else if (syncRes.hasConflicts) {
+        return { success: false, hasConflicts: true, conflicts: syncRes.conflicts, pendingCount: totalPending };
       } else {
-        db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'synced')").run();
-        return { success: false, error: res.error };
+        return { success: false, error: syncRes.errors.join('; '), syncedCount: syncRes.syncedCount, pendingCount: totalPending };
       }
     } catch (e) {
       db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('online_status', 'offline')").run();
@@ -1405,12 +1459,16 @@ function registerIpcHandlers() {
       recentAssessmentsQuery += ` ORDER BY a.updated_at DESC LIMIT 5`;
       recentAttendanceQuery += ` ORDER BY a.updated_at DESC LIMIT 5`;
 
+      // Use the actual logged-in user's display name so the activity log correctly
+      // attributes assessments and registrations to the right person.
+      const currentUserLabel = user ? (user.name || user.username || 'System') : 'System';
+
       const recentAssessments = db.prepare(recentAssessmentsQuery).all(...recentAssessmentsParams);
       recentAssessments.forEach(x => {
         activityLog.push({
           type: 'assessment',
           message: `${x.student_name} completed Diagnostic Assessment (${x.score}/${x.total_questions})`,
-          user: 'Teacher',
+          user: currentUserLabel,
           timestamp: x.updated_at
         });
       });
@@ -1420,7 +1478,7 @@ function registerIpcHandlers() {
         activityLog.push({
           type: 'attendance',
           message: `Attendance marked ${x.status} for ${x.name} (${x.date})`,
-          user: 'Teacher',
+          user: currentUserLabel,
           timestamp: x.updated_at
         });
       });

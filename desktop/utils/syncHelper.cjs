@@ -208,6 +208,8 @@ const TABLES_CONFIG = [
   {
     localTable:    'students',
     remoteTable:   'students',
+    onConflict:    'id',
+    uniqueKeys:    ['id', 'roll_number'],
     selectQuery:   "SELECT id, name, roll_number, class, status, updated_at FROM students WHERE sync_status = 'pending'",
     markSynced:    "UPDATE students SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, name: r.name, roll_number: r.roll_number, class: r.class, status: r.status, updated_at: r.updated_at })
@@ -215,6 +217,8 @@ const TABLES_CONFIG = [
   {
     localTable:    'teachers_admins',
     remoteTable:   'teachers_admins',
+    onConflict:    'id',
+    uniqueKeys:    ['id', 'username'],
     selectQuery:   "SELECT id, username, password_hash, role, name, email, phone_number, employee_id, hire_date, assigned_classes_json, assigned_subjects_json, last_login, status, updated_at FROM teachers_admins WHERE sync_status = 'pending'",
     markSynced:    "UPDATE teachers_admins SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({
@@ -237,8 +241,8 @@ const TABLES_CONFIG = [
   {
     localTable:    'classes',
     remoteTable:   'classes',
-    onConflict:    'name',
-    uniqueKeys:    ['name'],
+    onConflict:    'id',
+    uniqueKeys:    ['id', 'name'],
     selectQuery:   "SELECT id, name, status, updated_at FROM classes WHERE sync_status = 'pending'",
     markSynced:    "UPDATE classes SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, name: r.name, status: r.status, updated_at: r.updated_at })
@@ -246,8 +250,8 @@ const TABLES_CONFIG = [
   {
     localTable:    'subjects',
     remoteTable:   'subjects',
-    onConflict:    'name',
-    uniqueKeys:    ['name'],
+    onConflict:    'id',
+    uniqueKeys:    ['id', 'name'],
     selectQuery:   "SELECT id, name, status, updated_at FROM subjects WHERE sync_status = 'pending'",
     markSynced:    "UPDATE subjects SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, name: r.name, status: r.status, updated_at: r.updated_at })
@@ -255,6 +259,8 @@ const TABLES_CONFIG = [
   {
     localTable:    'question_bank',
     remoteTable:   'question_bank',
+    onConflict:    'id',
+    uniqueKeys:    ['id'],
     selectQuery:   "SELECT id, class, subject, text, audio_text, options_json, correct_answer, image_path, difficulty, approval_status, status, updated_at FROM question_bank WHERE sync_status = 'pending'",
     markSynced:    "UPDATE question_bank SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, class: r.class, subject: r.subject, text: r.text, audio_text: r.audio_text, options_json: r.options_json, correct_answer: r.correct_answer, image_path: r.image_path, difficulty: r.difficulty, approval_status: r.approval_status, status: r.status, updated_at: r.updated_at })
@@ -262,6 +268,8 @@ const TABLES_CONFIG = [
   {
     localTable:    'assessments',
     remoteTable:   'assessments',
+    onConflict:    'id',
+    uniqueKeys:    ['id'],
     selectQuery:   "SELECT id, student_id, score, total_questions, results_json, date, updated_at FROM assessments WHERE sync_status = 'pending'",
     markSynced:    "UPDATE assessments SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, student_id: r.student_id, score: r.score, total_questions: r.total_questions, results_json: r.results_json, date: r.date, updated_at: r.updated_at })
@@ -278,6 +286,8 @@ const TABLES_CONFIG = [
   {
     localTable:    'audit_logs',
     remoteTable:   'audit_logs',
+    onConflict:    'id',
+    uniqueKeys:    ['id'],
     selectQuery:   "SELECT id, user_id, action, details, timestamp FROM audit_logs WHERE sync_status = 'pending'",
     markSynced:    "UPDATE audit_logs SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, user_id: r.user_id, action: r.action, details: r.details, timestamp: r.timestamp })
@@ -285,6 +295,8 @@ const TABLES_CONFIG = [
   {
     localTable:    'question_versions',
     remoteTable:   'question_versions',
+    onConflict:    'id',
+    uniqueKeys:    ['id'],
     selectQuery:   "SELECT id, question_id, class, subject, text, audio_text, options_json, correct_answer, difficulty, version_number, changed_by, updated_at FROM question_versions WHERE sync_status = 'pending'",
     markSynced:    "UPDATE question_versions SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, question_id: r.question_id, class: r.class, subject: r.subject, text: r.text, audio_text: r.audio_text, options_json: r.options_json, correct_answer: r.correct_answer, difficulty: r.difficulty, version_number: r.version_number, changed_by: r.changed_by, updated_at: r.updated_at })
@@ -301,6 +313,8 @@ const TABLES_CONFIG = [
   {
     localTable:    'tuition_payments',
     remoteTable:   'tuition_payments',
+    onConflict:    'id',
+    uniqueKeys:    ['id'],
     selectQuery:   "SELECT id, student_id, amount, payment_date, payment_method, notes, updated_at FROM tuition_payments WHERE sync_status = 'pending'",
     markSynced:    "UPDATE tuition_payments SET sync_status = 'synced' WHERE sync_status = 'pending'",
     mapRow:        (r) => ({ id: r.id, student_id: r.student_id, amount: r.amount, payment_date: r.payment_date, payment_method: r.payment_method, notes: r.notes, updated_at: r.updated_at })
@@ -333,6 +347,15 @@ function getRowDisplayName(table, row) {
     return `Tuition Payment (${row.amount})`;
   }
   return row.id;
+}
+
+function parseTimestamp(ts) {
+  if (ts === null || ts === undefined || ts === '') return 0;
+  if (typeof ts === 'number') return ts;
+  const num = Number(ts);
+  if (!isNaN(num)) return num;
+  const parsed = Date.parse(ts);
+  return isNaN(parsed) ? 0 : parsed;
 }
 
 function rowsDiffer(cfg, localRow, remoteRow) {
@@ -424,21 +447,51 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
       const rows = db.prepare(cfg.selectQuery).all();
       if (rows.length === 0) continue;
 
-      const payload  = rows.map(cfg.mapRow);
+      let payload = rows.map(cfg.mapRow);
       let urlParams = '';
       if (cfg.onConflict) {
         urlParams = `?on_conflict=${cfg.onConflict}`;
       }
       const endpoint = `${baseUrl}/rest/v1/${cfg.remoteTable}${urlParams}`;
-      const result   = await supabaseUpsert(endpoint, apiKey, payload);
+      let result = await supabaseUpsert(endpoint, apiKey, payload);
+
+      // Auto-heal schema mismatches if remote table is missing a column (PGRST204).
+      // Strip the offending column and retry silently — only surface an error if the
+      // SECOND attempt also fails.
+      if (!result.ok && result.status === 400 && result.body && result.body.includes('PGRST204')) {
+        const match = result.body.match(/Could not find the ['"]([^'"]+)['"] column/i);
+        if (match && match[1]) {
+          const missingCol = match[1];
+          console.warn(`[syncHelper] Remote table '${cfg.remoteTable}' missing column '${missingCol}'. Stripping and retrying silently...`);
+          payload = payload.map(r => {
+            const copy = { ...r };
+            delete copy[missingCol];
+            return copy;
+          });
+          result = await supabaseUpsert(endpoint, apiKey, payload);
+          // Only report error if the retry also failed
+          if (!result.ok) {
+            const errMsg = `${cfg.remoteTable}: HTTP ${result.status} — ${result.body.substring(0, 200)}`;
+            errors.push(errMsg);
+            console.error('[syncHelper] Auto-heal retry also failed:', errMsg);
+          } else {
+            console.log(`[syncHelper] Auto-heal succeeded for '${cfg.remoteTable}' (stripped '${missingCol}')`);
+          }
+        } else {
+          // PGRST204 but no column name matched — report as error
+          const errMsg = `${cfg.remoteTable}: HTTP ${result.status} — ${result.body.substring(0, 200)}`;
+          errors.push(errMsg);
+          console.error('[syncHelper] Upsert error (PGRST204, no column match):', errMsg);
+        }
+      } else if (!result.ok) {
+        const errMsg = `${cfg.remoteTable}: HTTP ${result.status} — ${result.body.substring(0, 200)}`;
+        errors.push(errMsg);
+        console.error('[syncHelper] Upsert error:', errMsg);
+      }
 
       if (result.ok) {
         db.prepare(cfg.markSynced).run();
         totalSynced += rows.length;
-      } else {
-        const errMsg = `${cfg.remoteTable}: HTTP ${result.status} — ${result.body.substring(0, 200)}`;
-        errors.push(errMsg);
-        console.error('[syncHelper] Upsert error:', errMsg);
       }
     } catch (err) {
       const errMsg = `${cfg.remoteTable}: ${err.message}`;
@@ -447,7 +500,16 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
     }
   }
 
-  // 2.5. Pull Phase (download all records from cloud)
+  // 2.5. Pull Phase — download all records from cloud and merge into local DB.
+  //
+  // Safety rules to prevent data reversion:
+  //   A. If a local row has sync_status = 'pending', skip it — it has unsent local changes.
+  //   B. If the local row's updated_at >= the remote row's updated_at, skip — local is
+  //      at least as fresh. This prevents a freshly-pushed row being immediately overwritten
+  //      by the cloud's copy (which may lag behind by milliseconds in propagation).
+  //   C. If a remote row has status = 'deleted' and does NOT exist locally, do NOT insert
+  //      it — this prevents ghost re-insertion of students/records that were deleted locally
+  //      and already pushed.
   for (const cfg of TABLES_CONFIG) {
     try {
       const endpoint = `${baseUrl}/rest/v1/${cfg.remoteTable}`;
@@ -484,12 +546,20 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
               idMismatchedRow = db.prepare(`SELECT ${selectMismatchedCols} FROM ${cfg.localTable} WHERE ${clauses}`).get(...params);
               
               if (idMismatchedRow) {
-                // Heals the local ID mismatch: update local ID to remote ID!
+                // Heals the local ID mismatch: update local ID to remote ID
                 db.prepare(`UPDATE ${cfg.localTable} SET id = ? WHERE id = ?`).run(filteredRow.id, idMismatchedRow.id);
                 localRow = db.prepare(`SELECT ${selectCols} FROM ${cfg.localTable} WHERE id = ?`).get(filteredRow.id);
               }
             }
+
             if (!localRow) {
+              // SAFETY RULE C: Do NOT re-insert a remotely-deleted row that doesn't exist
+              // locally. This prevents ghost resurrection of deleted students/records.
+              if (filteredRow.status === 'deleted') {
+                console.log(`[syncHelper] Skipping remote-deleted row ${filteredRow.id} (${cfg.localTable}) — not inserting ghost.`);
+                continue;
+              }
+
               if (cfg.localTable === 'teachers_admins' && (filteredRow.password_hash === undefined || filteredRow.password_hash === null)) {
                 const cryptoHelper = require('./cryptoHelper.cjs');
                 filteredRow.password_hash = cryptoHelper.hashPassword('wisdom123');
@@ -505,7 +575,9 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
               `).run(...values);
               pulledCount++;
             } else {
+              // SAFETY RULE A: Skip rows with pending local changes.
               if (localRow.sync_status === 'pending') {
+                console.log(`[syncHelper] Skipping pull for ${cfg.localTable} id=${filteredRow.id} — local has pending changes.`);
                 continue;
               }
 
@@ -514,9 +586,13 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
               }
 
               const hasUpdatedAt = filteredRow.updated_at !== undefined && filteredRow.updated_at !== null;
-              const shouldUpdate = hasUpdatedAt 
-                ? Number(filteredRow.updated_at) > Number(localRow.updated_at)
-                : true;
+              const remoteTime = parseTimestamp(filteredRow.updated_at);
+              const localTime  = parseTimestamp(localRow.updated_at);
+
+              // SAFETY RULE B: Only overwrite if remote is strictly newer than local.
+              // Using strict > (not >=) prevents overwriting a row that was just pushed
+              // (same timestamp) or is locally newer.
+              const shouldUpdate = hasUpdatedAt ? remoteTime > localTime : true;
 
               if (shouldUpdate) {
                 if (cfg.localTable === 'teachers_admins' && (filteredRow.password_hash === undefined || filteredRow.password_hash === null)) {
@@ -613,7 +689,8 @@ async function pushSettingToCloud(projectUrl, apiKey, key, value) {
 }
 
 /**
- * Resolve conflicts by keeping cloud version of the specified records.
+ * Resolve conflicts by keeping cloud version of the specified records ("Overwrite Local").
+ * The local row is updated with the remote data and marked 'synced'.
  */
 async function resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts) {
   if (!projectUrl || !apiKey || !conflicts || conflicts.length === 0) {
@@ -634,6 +711,11 @@ async function resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts) {
         const remoteRow = result.rows[0];
         const mappedRemote = cfg.mapRow(remoteRow);
 
+        // Protect password_hash from being nulled out on teachers_admins
+        if (cfg.localTable === 'teachers_admins' && (mappedRemote.password_hash === undefined || mappedRemote.password_hash === null)) {
+          delete mappedRemote.password_hash;
+        }
+
         const keys = Object.keys(mappedRemote).filter(k => k !== 'id');
         const setClauses = keys.map(k => `${k} = ?`).join(', ');
         const values = [...keys.map(k => mappedRemote[k]), 'synced', conflict.id];
@@ -650,4 +732,36 @@ async function resolveConflictsWithCloud(db, projectUrl, apiKey, conflicts) {
   return { success: true };
 }
 
-module.exports = { pushPendingRecords, resolveConflictsWithCloud, supabaseGet, pushSettingToCloud };
+/**
+ * Resolve conflicts by keeping the LOCAL version ("Overwrite Cloud").
+ * Mark each conflicted row as 'pending' with a bumped updated_at so:
+ *   1. The follow-on push phase will pick it up and send it to cloud.
+ *   2. The Pull Phase will skip it (pending rule A) and won't overwrite it back.
+ */
+function resolveConflictsKeepLocal(db, conflicts) {
+  if (!conflicts || conflicts.length === 0) return { success: true };
+
+  try {
+    const now = Date.now();
+    for (const conflict of conflicts) {
+      const cfg = TABLES_CONFIG.find(c => c.localTable === conflict.table);
+      if (!cfg) continue;
+
+      // Bump updated_at and mark pending so the push phase sends this row
+      // and the Pull Phase won't re-overwrite it (pending rule A).
+      db.prepare(`
+        UPDATE ${conflict.table}
+        SET sync_status = 'pending', updated_at = ?
+        WHERE id = ?
+      `).run(now, conflict.id);
+      console.log(`[syncHelper] Marked ${conflict.table} id=${conflict.id} as pending for "Overwrite Cloud" resolution.`);
+    }
+    return { success: true };
+  } catch (err) {
+    console.error('[syncHelper] resolveConflictsKeepLocal error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+module.exports = { pushPendingRecords, resolveConflictsWithCloud, resolveConflictsKeepLocal, supabaseGet, pushSettingToCloud };
+

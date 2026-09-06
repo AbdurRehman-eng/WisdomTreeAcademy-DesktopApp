@@ -42,6 +42,19 @@ export const AssessmentRunner = () => {
     }
   ];
 
+const buildFullAudioText = (text, options, customAudioText) => {
+  const baseText = customAudioText || text || '';
+  if (!options || !Array.isArray(options) || options.length === 0) {
+    return baseText;
+  }
+  const optionsText = options.map((opt, idx) => {
+    const letter = String.fromCharCode(65 + idx);
+    const val = opt && typeof opt === 'object' ? opt.text : opt;
+    return `Option ${letter}: ${val}`;
+  }).join('. ');
+  return `${baseText}. ${optionsText}.`;
+};
+
   useEffect(() => {
     if (!activeAssessment) {
       showToast('Please select a student and subject to launch an assessment.', 'warning');
@@ -61,7 +74,7 @@ export const AssessmentRunner = () => {
           options: q.options,
           correct: q.options[String(q.correct_answer).charCodeAt(0) - 65] || q.correct_answer, // resolve option index/value
           correctLetter: q.correct_answer,
-          audioText: q.audio_text || q.text,
+          audioText: buildFullAudioText(q.text, q.options, q.audio_text),
           image_path: q.image_path,
           subject: q.subject || activeAssessment.subject,
           class: q.class || activeAssessment.class
@@ -73,6 +86,7 @@ export const AssessmentRunner = () => {
           // If no questions match class and subject, use child-focused fallback questions
           const fallbackWithMeta = fallbackQuestions.map(f => ({
             ...f,
+            audioText: buildFullAudioText(f.text, f.options, f.audioText),
             subject: activeAssessment.subject,
             class: activeAssessment.class
           }));
@@ -81,6 +95,7 @@ export const AssessmentRunner = () => {
       } else {
         const fallbackWithMeta = fallbackQuestions.map(f => ({
           ...f,
+          audioText: buildFullAudioText(f.text, f.options, f.audioText),
           subject: activeAssessment.subject,
           class: activeAssessment.class
         }));

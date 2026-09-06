@@ -23,6 +23,47 @@ export const SyncSettings = () => {
 
   const [newKey, setNewKey] = useState('');
 
+  // Supabase sync config state
+  const [projectUrl, setProjectUrl] = useState('');
+  const [apiKey, setApiKey] = useState('');
+  const [savingConfig, setSavingConfig] = useState(false);
+
+  useEffect(() => {
+    const loadSyncConfig = async () => {
+      if (window.api?.getSyncConfig) {
+        const config = await window.api.getSyncConfig();
+        setProjectUrl(config.projectUrl || '');
+        setApiKey(config.apiKey || '');
+      }
+    };
+    loadSyncConfig();
+  }, []);
+
+  const handleSaveConfig = async () => {
+    if (!projectUrl.trim() || !apiKey.trim()) {
+      showToast('Project URL and API Key cannot be empty.', 'error');
+      return;
+    }
+    setSavingConfig(true);
+    try {
+      if (window.api?.setSyncConfig) {
+        const res = await window.api.setSyncConfig(projectUrl.trim(), apiKey.trim());
+        if (res.success) {
+          showToast('Supabase sync configuration updated successfully!', 'success');
+          refreshSyncInfo();
+        } else {
+          showToast(res.error || 'Failed to save configuration.', 'error');
+        }
+      } else {
+        showToast('Configuration save simulated (web preview mode).', 'info');
+      }
+    } catch (err) {
+      showToast(err.message, 'error');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
   // Change Password state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -275,6 +316,40 @@ export const SyncSettings = () => {
             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
               When online, sync pushes pending local records to your configured Supabase cloud database. Configure the endpoint below.
             </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--border-color)', paddingTop: '12px', marginTop: '4px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>Supabase Project URL</label>
+                <input
+                  type="text"
+                  placeholder="https://your-project.supabase.co"
+                  value={projectUrl}
+                  onChange={(e) => setProjectUrl(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)' }}>Anon API Key</label>
+                <input
+                  type="password"
+                  placeholder="your-anon-key"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  style={inputStyle}
+                />
+              </div>
+
+              <Button
+                variant="secondary"
+                onClick={handleSaveConfig}
+                disabled={savingConfig}
+                icon={Save}
+                style={{ width: '100%', marginTop: '4px' }}
+              >
+                {savingConfig ? 'Saving...' : 'Save Cloud Configuration'}
+              </Button>
+            </div>
 
             <Button
               variant="primary"
