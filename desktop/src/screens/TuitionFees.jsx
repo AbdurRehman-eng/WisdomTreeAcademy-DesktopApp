@@ -29,13 +29,20 @@ const getLocalDateString = () => {
 };
 
 const calculateTuitionStatus = (totalCharged, amountPaid) => {
-  if (!totalCharged || totalCharged <= 0) {
+  const charged = Number(totalCharged) || 0;
+  const paid = Number(amountPaid) || 0;
+
+  if (charged <= 0) {
+    if (paid > 0) return 'Unallocated Credit';
     return 'No Fee Assigned';
   }
-  if (amountPaid >= totalCharged) {
+  if (paid > charged) {
+    return 'Overpaid (Credit)';
+  }
+  if (paid >= charged) {
     return 'Paid';
   }
-  if (amountPaid > 0) {
+  if (paid > 0) {
     return 'Partially Paid';
   }
   return 'Outstanding';
@@ -297,7 +304,13 @@ export const TuitionFees = () => {
       key: 'status', 
       label: 'Payment Status', 
       render: (val) => (
-        <Badge variant={val === 'Paid' ? 'success' : val === 'Partially Paid' ? 'warning' : val === 'No Fee Assigned' ? 'secondary' : 'danger'}>
+        <Badge variant={
+          val === 'Paid' || val === 'Overpaid (Credit)' ? 'success' :
+          val === 'Partially Paid' ? 'warning' :
+          val === 'Unallocated Credit' ? 'warning' :
+          val === 'No Fee Assigned' ? 'secondary' :
+          'danger'
+        }>
           {val}
         </Badge>
       )
@@ -358,7 +371,13 @@ export const TuitionFees = () => {
                 </div>
                 <div className="flex justify-between items-center" style={{ paddingTop: '4px' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>Payment Status</span>
-                  <Badge variant={selectedStudent.status === 'Paid' ? 'success' : selectedStudent.status === 'Partially Paid' ? 'warning' : selectedStudent.status === 'No Fee Assigned' ? 'secondary' : 'danger'}>
+                  <Badge variant={
+                    selectedStudent.status === 'Paid' || selectedStudent.status === 'Overpaid (Credit)' ? 'success' :
+                    selectedStudent.status === 'Partially Paid' ? 'warning' :
+                    selectedStudent.status === 'Unallocated Credit' ? 'warning' :
+                    selectedStudent.status === 'No Fee Assigned' ? 'secondary' :
+                    'danger'
+                  }>
                     {selectedStudent.status}
                   </Badge>
                 </div>
@@ -513,6 +532,7 @@ export const TuitionFees = () => {
                   <option value="Paid">Paid</option>
                   <option value="Partially Paid">Partially Paid</option>
                   <option value="Outstanding">Outstanding</option>
+                  <option value="Unallocated Credit">Unallocated Credit</option>
                   <option value="No Fee Assigned">No Fee Assigned</option>
                 </select>
               </div>
@@ -584,6 +604,12 @@ export const TuitionFees = () => {
           }
         >
           <form onSubmit={handleSavePayment} className="flex flex-col gap-md">
+            {selectedStudent.total_charged <= 0 && (
+              <div style={{ padding: '10px 12px', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid #f59e0b', borderRadius: '6px', fontSize: '13px', color: 'var(--text-primary)' }}>
+                <AlertCircle size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle', color: '#f59e0b' }} />
+                Note: No tuition fee has been assigned to this student yet. Recording this payment will be logged as an <strong>Unallocated Credit</strong>.
+              </div>
+            )}
             <div className="form-group">
               <label className="form-label">Student Name</label>
               <input type="text" className="form-input" disabled value={selectedStudent.student_name} />

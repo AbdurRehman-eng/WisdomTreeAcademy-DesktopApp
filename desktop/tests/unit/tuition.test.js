@@ -127,13 +127,23 @@ describe('Tuition Database Operations & Logic Tests', () => {
 
   // Helper status derivation function to match UI logic
   const deriveStatus = (totalCharged, amountPaid) => {
-    if (totalCharged > 0) {
-      if (amountPaid >= totalCharged) return 'Paid';
-      if (amountPaid > 0) return 'Partially Paid';
-      return 'Outstanding';
+    const charged = Number(totalCharged) || 0;
+    const paid = Number(amountPaid) || 0;
+
+    if (charged <= 0) {
+      if (paid > 0) return 'Unallocated Credit';
+      return 'No Fee Assigned';
     }
-    return 'Paid';
+    if (paid > charged) return 'Overpaid (Credit)';
+    if (paid >= charged) return 'Paid';
+    if (paid > 0) return 'Partially Paid';
+    return 'Outstanding';
   };
+
+  it('should identify Unallocated Credit when total charged is 0.0 and amount paid > 0', () => {
+    expect(deriveStatus(0.0, 122.0)).toBe('Unallocated Credit');
+    expect(deriveStatus(0.0, 0.0)).toBe('No Fee Assigned');
+  });
 
   it('should default tuition charged and paid to 0.0 when LEFT JOIN is used and no record exists', () => {
     const row = db.prepare(`
@@ -148,7 +158,7 @@ describe('Tuition Database Operations & Logic Tests', () => {
 
     expect(row.total_charged).toBe(0.0);
     expect(row.amount_paid).toBe(0.0);
-    expect(deriveStatus(row.total_charged, row.amount_paid)).toBe('Paid');
+    expect(deriveStatus(row.total_charged, row.amount_paid)).toBe('No Fee Assigned');
   });
 
   it('should insert student_tuition record when tuition charge is updated', () => {

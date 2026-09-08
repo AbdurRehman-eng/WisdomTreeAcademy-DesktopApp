@@ -738,14 +738,19 @@ function registerIpcHandlers() {
   });
 
   // Questions
-  ipcMain.handle('db:get-questions', () => {
+  ipcMain.handle('db:get-questions', (event, options = {}) => {
     try {
-      const questions = db.prepare(`
+      let sql = `
         SELECT q.*, t.name as creator_name 
         FROM question_bank q
         LEFT JOIN teachers_admins t ON q.created_by = t.id
         WHERE q.status != 'deleted'
-      `).all();
+      `;
+      if (options && options.assessmentOnly) {
+        sql += ` AND q.status = 'active' AND q.approval_status = 'approved'`;
+      }
+      sql += ` ORDER BY q.updated_at DESC`;
+      const questions = db.prepare(sql).all();
       return questions.map(q => ({
         ...q,
         options: JSON.parse(q.options_json)
@@ -1504,12 +1509,18 @@ function registerIpcHandlers() {
           });
         });
 
-        const recentQuestions = db.prepare("SELECT class, subject, updated_at FROM question_bank WHERE status = 'active' ORDER BY updated_at DESC LIMIT 5").all();
+        const recentQuestions = db.prepare(`
+          SELECT q.class, q.subject, q.updated_at, t.name as creator_name, t.username as creator_username
+          FROM question_bank q
+          LEFT JOIN teachers_admins t ON q.created_by = t.id
+          WHERE q.status = 'active'
+          ORDER BY q.updated_at DESC LIMIT 5
+        `).all();
         recentQuestions.forEach(x => {
           activityLog.push({
             type: 'question',
             message: `Added new question to ${x.class} ${x.subject} Bank`,
-            user: 'Administrator',
+            user: x.creator_name || x.creator_username || 'Administrator',
             timestamp: x.updated_at
           });
         });

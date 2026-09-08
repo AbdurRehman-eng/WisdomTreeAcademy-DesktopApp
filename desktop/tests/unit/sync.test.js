@@ -320,4 +320,109 @@ describe('Sync Conflict Resolution Tests', () => {
     expect(passedValue).toBeDefined();
     expect(passedValue).toContain(':');
   });
+
+  it('should auto-push local changes without conflict when remote timestamp is older or equal to local', async () => {
+    const db = new Database(':memory:');
+
+    const localPendingStudent = {
+      id: 'S200',
+      name: 'Local Updated Student',
+      roll_number: 'WTA-200',
+      class: 'Grade 1',
+      status: 'active',
+      updated_at: 2000
+    };
+
+    const mockRemoteRecord = {
+      id: 'S200',
+      name: 'Old Remote Student Name',
+      roll_number: 'WTA-200',
+      class: 'Grade 1',
+      status: 'active',
+      updated_at: 1000 // Remote timestamp is OLDER than local (1000 < 2000)
+    };
+
+    const mockResponse = {
+      statusCode: 200,
+      on: (event, cb) => {
+        if (event === 'data') cb(JSON.stringify([mockRemoteRecord]));
+        if (event === 'end') cb();
+      }
+    };
+
+    const mockRequest = { on: vi.fn(), setTimeout: vi.fn(), end: vi.fn(), write: vi.fn() };
+    https.request = vi.fn().mockImplementation((options, callback) => {
+      callback(mockResponse);
+      return mockRequest;
+    });
+
+    db.prepare = vi.fn().mockImplementation((sql) => {
+      if (sql.startsWith('SELECT') && sql.includes("WHERE sync_status = 'pending'")) {
+        if (sql.includes('students')) return { all: () => [localPendingStudent] };
+        return { all: () => [] };
+      }
+      if (sql.includes("PRAGMA table_info")) {
+        return { all: () => [{ name: 'id' }, { name: 'name' }, { name: 'roll_number' }, { name: 'class' }, { name: 'status' }, { name: 'updated_at' }] };
+      }
+      return { run: () => ({ changes: 1 }), get: () => null, all: () => [] };
+    });
+
+    const { pushPendingRecords } = require('../../utils/syncHelper.cjs');
+    const result = await pushPendingRecords(db, 'https://example.supabase.co', 'dummy-key', false);
+
+    // Should succeed and NOT return hasConflicts because local is newer (2000 > 1000)
+    expect(result.hasConflicts).toBeUndefined();
+    expect(result.success).toBe(true);
+  });
+
+  it('should flag conflict when remote timestamp is strictly newer than local pending change', async () => {
+    const db = new Database(':memory:');
+
+    const localPendingStudent = {
+      id: 'S201',
+      name: 'Local Student Edit',
+      roll_number: 'WTA-201',
+      class: 'Grade 1',
+      status: 'active',
+      updated_at: 1000
+    };
+
+    const mockRemoteRecord = {
+      id: 'S201',
+      name: 'Remote Newer Student Edit',
+      roll_number: 'WTA-201',
+      class: 'Grade 1',
+      status: 'active',
+      updated_at: 3000 // Remote is NEWER than local (3000 > 1000)
+    };
+
+    const mockResponse = {
+      statusCode: 200,
+      on: (event, cb) => {
+        if (event === 'data') cb(JSON.stringify([mockRemoteRecord]));
+        if (event === 'end') cb();
+      }
+    };
+
+    const mockRequest = { on: vi.fn(), setTimeout: vi.fn(), end: vi.fn(), write: vi.fn() };
+    https.request = vi.fn().mockImplementation((options, callback) => {
+      callback(mockResponse);
+      return mockRequest;
+    });
+
+    db.prepare = vi.fn().mockImplementation((sql) => {
+      if (sql.includes("WHERE sync_status = 'pending'")) {
+        if (sql.includes('students')) return { all: () => [localPendingStudent] };
+        return { all: () => [] };
+      }
+      return { run: () => ({ changes: 1 }), get: () => null, all: () => [] };
+    });
+
+    const { pushPendingRecords } = require('../../utils/syncHelper.cjs');
+    const result = await pushPendingRecords(db, 'https://example.supabase.co', 'dummy-key', false);
+
+    expect(result.hasConflicts).toBe(true);
+    expect(result.conflicts.length).toBe(1);
+    expect(result.conflicts[0].id).toBe('S201');
+  });
 });

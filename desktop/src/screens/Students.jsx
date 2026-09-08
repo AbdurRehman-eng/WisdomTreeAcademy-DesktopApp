@@ -141,7 +141,11 @@ export const Students = () => {
       <div className="flex justify-between items-center header-margin" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '16px' }}>
         <div>
           <h1 className="welcome-heading">Student Registry Manager</h1>
-          <p className="welcome-subtext">Register student enrollments, modify classroom assignments, and view profiles.</p>
+          <p className="welcome-subtext">
+            {user?.role === 'teacher'
+              ? 'View student profiles, classroom assignments, and active enrollment rosters.'
+              : 'Register student enrollments, modify classroom assignments, and view profiles.'}
+          </p>
         </div>
         {user?.role !== 'teacher' && (
           <Button variant="primary" onClick={handleOpenAdd} icon={UserPlus}>

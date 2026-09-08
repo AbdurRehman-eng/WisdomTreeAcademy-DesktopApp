@@ -361,7 +361,7 @@ function parseTimestamp(ts) {
 function rowsDiffer(cfg, localRow, remoteRow) {
   const mappedLocal = cfg.mapRow(localRow);
   for (const key of Object.keys(mappedLocal)) {
-    if (key === 'updated_at') continue;
+    if (key === 'updated_at' || key === 'last_login') continue;
     
     let localVal = mappedLocal[key];
     let remoteVal = remoteRow[key];
@@ -413,7 +413,11 @@ async function pushPendingRecords(db, projectUrl, apiKey, force = false) {
           for (const localRow of localRows) {
             const remoteRow = result.rows.find(r => r.id === localRow.id);
             if (remoteRow) {
-              if (rowsDiffer(cfg, localRow, remoteRow)) {
+              const remoteTime = parseTimestamp(remoteRow.updated_at);
+              const localTime  = parseTimestamp(localRow.updated_at);
+              // A conflict only occurs if the cloud record was modified MORE RECENTLY
+              // than the local pending change AND data fields actually differ.
+              if (remoteTime > localTime && rowsDiffer(cfg, localRow, remoteRow)) {
                 conflicts.push({
                   table: cfg.localTable,
                   id: localRow.id,

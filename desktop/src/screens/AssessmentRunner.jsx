@@ -64,10 +64,14 @@ const buildFullAudioText = (text, options, customAudioText) => {
 
     const loadQuestions = async () => {
       if (window.api) {
-        const dbQs = await window.api.getQuestions({ includeAll: false });
-        // Filter by student class and selected subject
+        const dbQs = await window.api.getQuestions({ assessmentOnly: true });
+        // Filter by student class and selected subject, excluding archived or pending items
         const filtered = dbQs.filter(
-          q => q.class === activeAssessment.class && q.subject === activeAssessment.subject
+          q => q.class === activeAssessment.class && 
+               q.subject === activeAssessment.subject &&
+               q.status !== 'archived' &&
+               q.status !== 'deleted' &&
+               (q.approval_status === 'approved' || q.approval_status === undefined)
         ).map(q => ({
           id: q.id,
           text: q.text,

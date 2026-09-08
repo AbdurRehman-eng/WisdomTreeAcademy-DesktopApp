@@ -15,6 +15,7 @@ export const QuestionBank = () => {
   const [selectedSubject, setSelectedSubject] = useState('All');
   const [selectedDifficulty, setSelectedDifficulty] = useState('All');
   const [selectedStatus, setSelectedStatus] = useState('All');
+  const [activeTab, setActiveTab] = useState('official'); // 'official', 'my_classroom', 'archived'
 
   // Modal forms states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -154,7 +155,21 @@ export const QuestionBank = () => {
     const matchSubject = selectedSubject === 'All' || q.subject === selectedSubject;
     const matchDiff = selectedDifficulty === 'All' || q.difficulty === selectedDifficulty;
     const matchStatus = selectedStatus === 'All' || q.status === selectedStatus;
-    return matchGrade && matchSubject && matchDiff && matchStatus;
+
+    let matchTab = true;
+    if (activeTab === 'official') {
+      matchTab = q.status === 'approved';
+    } else if (activeTab === 'my_classroom') {
+      if (user?.role === 'teacher') {
+        matchTab = (q.created_by === user.id) || (q.status === 'pending');
+      } else {
+        matchTab = q.status === 'pending';
+      }
+    } else if (activeTab === 'archived') {
+      matchTab = q.status === 'archived';
+    }
+
+    return matchGrade && matchSubject && matchDiff && matchStatus && matchTab;
   });
 
   const handleRecordToggle = () => {
@@ -417,6 +432,33 @@ export const QuestionBank = () => {
             Add Question
           </Button>
         </div>
+      </div>
+
+      {/* Tab Navigation: Official Approved vs Classroom / Pending vs Archived */}
+      <div className="qb-tab-bar" style={{ display: 'flex', gap: '12px', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '12px' }}>
+        <button
+          className={`filter-pill ${activeTab === 'official' ? 'active' : ''}`}
+          style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
+          onClick={() => setActiveTab('official')}
+        >
+          🏛️ Official Approved Question Bank ({questions.filter(q => q.status === 'approved').length})
+        </button>
+        <button
+          className={`filter-pill ${activeTab === 'my_classroom' ? 'active' : ''}`}
+          style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
+          onClick={() => setActiveTab('my_classroom')}
+        >
+          📝 {user?.role === 'teacher' ? 'My Classroom Questions / Pending Review' : 'Pending Review & Staff Drafts'} ({
+            questions.filter(q => user?.role === 'teacher' ? (q.created_by === user.id || q.status === 'pending') : q.status === 'pending').length
+          })
+        </button>
+        <button
+          className={`filter-pill ${activeTab === 'archived' ? 'active' : ''}`}
+          style={{ padding: '8px 16px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}
+          onClick={() => setActiveTab('archived')}
+        >
+          📦 Archived Questions ({questions.filter(q => q.status === 'archived').length})
+        </button>
       </div>
 
       {/* Main Workspace Layout (Split Pane) */}

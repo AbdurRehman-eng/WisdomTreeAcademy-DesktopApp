@@ -37,7 +37,7 @@ contextBridge.exposeInMainWorld('api', {
   deleteSubject: (id) => ipcRenderer.invoke('db:delete-subject', id),
 
   // Question Bank
-  getQuestions: () => ipcRenderer.invoke('db:get-questions'),
+  getQuestions: (options) => ipcRenderer.invoke('db:get-questions', options),
   saveQuestion: (question) => ipcRenderer.invoke('db:save-question', question),
   deleteQuestion: (id, currentUserId, currentUserRole) => ipcRenderer.invoke('db:delete-question', id, currentUserId, currentUserRole),
   importQuestions: (questions, currentUserId, currentUserRole) => ipcRenderer.invoke('db:import-questions', questions, currentUserId, currentUserRole),
